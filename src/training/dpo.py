@@ -1,7 +1,6 @@
 """DPO training entry points."""
 
 from datasets import Dataset
-from trl import DPOConfig, DPOTrainer
 
 from src.debugging.debug_loop import agentic_debug_loop
 
@@ -42,6 +41,11 @@ def run_dpo_training(
     per_device_train_batch_size: int = 4,
 ):
     """Run Direct Preference Optimization (DPO) training."""
+    try:
+        from trl import DPOConfig, DPOTrainer
+    except ImportError as e:
+        raise ImportError(f"TRL library is required for DPO training. Install with `pip install trl`: {e}")
+
     dpo_config = DPOConfig(
         beta=beta,
         learning_rate=learning_rate,

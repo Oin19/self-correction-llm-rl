@@ -29,6 +29,7 @@ results/logs/*
 results/metrics/*
 results/figures/*
 
-# OS
+# OS and Archives
 .DS_Store
 Thumbs.db
+*.zip
