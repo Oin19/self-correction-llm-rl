@@ -1,4 +1,4 @@
-"""Execution status definitions. Implementation owned by Junior B."""
+"""Execution status definitions. Implementation owned by Junior B & Junior A."""
 
 from enum import Enum
 from typing import Dict, Tuple
@@ -36,3 +36,9 @@ STATUS_RANK: Dict[str, int] = {
     "CE": 6,
     "RE": 7,
 }
+
+
+def is_valid_status(status: str) -> bool:
+    """Check if status code is valid."""
+    return status in STATUSES
+

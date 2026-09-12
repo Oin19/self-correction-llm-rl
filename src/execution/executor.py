@@ -149,7 +149,7 @@ class PythonSandbox:
                 passed_tests=0,
                 total_tests=1,
                 stderr=f"Execution timed out after {timeout} seconds.",
-                traceback=f"TimeoutError: Code execution exceeded time limit of {timeout}s.",
+                traceback=f"TimeoutError: Execution timed out after {timeout} seconds.",
             )
         except Exception as e:
             return ExecutionResult(
@@ -297,3 +297,15 @@ class PythonSandbox:
             script += "print('PASSED_TEST_MARKER')\n"
 
         return script
+
+
+def run_code(code: str, timeout: int = 8) -> dict:
+    """Safely run Python code and return status + output dictionary."""
+    sandbox = PythonSandbox(default_timeout=float(timeout))
+    res = sandbox.run_single(code)
+    return {
+        "status": res.status,
+        "output": res.stdout,
+        "traceback": res.traceback or res.stderr,
+    }
+

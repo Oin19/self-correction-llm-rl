@@ -1,17 +1,20 @@
 """Iterative execution-feedback debugging loop.
 Builds the agentic loop: problem -> buggy code -> sandbox execution -> feedback -> model fix -> re-execute.
-Implementation owned by Junior B.
+Implementation owned by Junior B & Junior A.
 """
 
 import re
+import random
 from typing import Any, Callable, Dict, List, Optional
-from src.execution.executor import ExecutionResult, PythonSandbox
+from src.execution.executor import ExecutionResult, PythonSandbox, run_code
 from src.execution.status import ExecutionStatus
 from src.rewards.execution_reward import compute_partial_reward
 
 
-def extract_code_block(text: str) -> str:
+def extract_code_block(text: str, prompt: str = "") -> str:
     """Extracts python code from markdown code blocks or returns raw string."""
+    if prompt and text.startswith(prompt):
+        text = text[len(prompt):]
     pattern = r"```python\s*(.*?)\s*```"
     match = re.search(pattern, text, re.DOTALL)
     if match:
@@ -98,7 +101,6 @@ class DebugLoop:
                 raw_response = model_fn(prompt)
                 current_code = extract_code_block(raw_response)
             else:
-                # If we received initial code in turn 1, we execute it directly
                 prompt = ""
 
             exec_res = self.sandbox.run_tests(current_code, test_cases)
@@ -119,7 +121,6 @@ class DebugLoop:
                 solved_turn = turn_idx
                 break
 
-            # Build next turn prompt with feedback if not solved
             if turn_idx < self.max_turns:
                 turn_prompt = self.build_turn_prompt(problem_description, current_code, exec_res)
                 raw_response = model_fn(turn_prompt)
@@ -134,3 +135,96 @@ class DebugLoop:
             "final_status": history[-1]["status"],
             "final_reward": history[-1]["reward"],
         }
+
+
+def build_prompt(problem: str, prev_code: str = None, traceback: str = None) -> str:
+    """Build the model prompt — adds error context on retry turns."""
+    if prev_code is None:
+        return f"### Problem:\n{problem}\n\n### Write a Python solution:\n```python"
+    else:
+        tb_trimmed = (traceback or "")[:512]
+        return (
+            f"### Problem:\n{problem}\n\n"
+            f"### Your previous code:\n```python\n{prev_code}\n```\n\n"
+            f"### Error you received:\n{tb_trimmed}\n\n"
+            f"### Fixed version:\n```python"
+        )
+
+
+def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, K: int = 3) -> list:
+    """Run up to K debugging turns with execution feedback."""
+    import torch
+    history = []
+    code, traceback = None, ""
+    device = next(model.parameters()).device
+    test_cases = test_cases or []
+
+    for turn in range(K):
+        prompt = build_prompt(problem, code, traceback)
+        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
+        with torch.no_grad():
+            output = model.generate(
+                **inputs,
+                max_new_tokens=512,
+                temperature=0.2 if turn == 0 else 1.0,
+                do_sample=(turn > 0),
+                top_p=0.95,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+
+        full = tokenizer.decode(output[0], skip_special_tokens=True)
+        code = extract_code_block(full, prompt)
+
+        full_code = code + "\n" + "\n".join(test_cases) if test_cases else code
+        result = run_code(full_code)
+
+        history.append({"turn": turn + 1, "code": code, "result": result})
+
+        if result["status"] == "AC":
+            break
+        traceback = result.get("traceback", "")
+
+    return history
+
+
+def agentic_loop_no_feedback(model, tokenizer, problem: str, test_cases: list = None, K: int = 3) -> list:
+    """RQ2 ablation study: same debugging loop but injects RANDOM fake traceback instead of real execution feedback."""
+    history = []
+    code = None
+    fake_errors = [
+        'NameError: name "x" is not defined',
+        "IndexError: list index out of range",
+        "TypeError: unsupported operand type(s)",
+    ]
+    device = next(model.parameters()).device
+    test_cases = test_cases or []
+
+    for turn in range(K):
+        fake_tb = random.choice(fake_errors)
+        prompt = build_prompt(problem, code, fake_tb)
+        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
+        with torch.no_grad():
+            output = model.generate(
+                **inputs,
+                max_new_tokens=512,
+                temperature=0.2 if turn == 0 else 1.0,
+                do_sample=(turn > 0),
+                top_p=0.95,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+
+        full = tokenizer.decode(output[0], skip_special_tokens=True)
+        code = extract_code_block(full, prompt)
+
+        full_code = code + "\n" + "\n".join(test_cases) if test_cases else code
+        result = run_code(full_code)
+
+        history.append({"turn": turn + 1, "code": code, "result": result})
+
+        if result["status"] == "AC":
+            break
+
+    return history
+
