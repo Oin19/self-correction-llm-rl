@@ -1,3 +1,69 @@
-"""PPO training entry points. Implementation owned by Junior 1."""
+"""PPO training entry points with execution-guided rewards."""
 
-# TODO: implement PPO with execution-guided rewards and KL control.
+import torch
+from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
+
+from src.execution.executor import run_code
+from src.rewards.execution_reward import compute_reward
+
+
+def run_ppo_training(
+    sft_model_path: str,
+    tokenizer,
+    dataset,
+    output_dir: str = "./checkpoints/ppo",
+    num_epochs: int = 10,
+    learning_rate: float = 1e-6,
+    batch_size: int = 16,
+    mini_batch_size: int = 4,
+    gradient_accumulation_steps: int = 4,
+    init_kl_coef: float = 0.02,
+    target_kl: float = 6.0,
+):
+    """Run PPO reinforcement learning guided by python sandbox execution output."""
+    ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(sft_model_path)
+
+    ppo_config = PPOConfig(
+        model_name=sft_model_path,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        mini_batch_size=mini_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        kl_penalty="kl",
+        init_kl_coef=init_kl_coef,
+        target_kl=target_kl,
+    )
+
+    ppo_trainer = PPOTrainer(
+        config=ppo_config,
+        model=ppo_model,
+        ref_model=None,  # TRL creates a frozen reference copy
+        tokenizer=tokenizer,
+        dataset=dataset,
+    )
+
+    for epoch in range(num_epochs):
+        for batch in ppo_trainer.dataloader:
+            queries = batch["input_ids"]
+            responses = ppo_trainer.generate(
+                queries,
+                max_new_tokens=512,
+                temperature=1.0,
+                top_p=0.95,
+            )
+
+            rewards = []
+            for q, r in zip(queries, responses):
+                code = tokenizer.decode(r, skip_special_tokens=True)
+                result = run_code(code)
+                reward_val = compute_reward(result["status"], 0, 1)
+                rewards.append(torch.tensor(reward_val, dtype=torch.float32))
+
+            stats = ppo_trainer.step(queries, responses, rewards)
+            mean_score = stats.get("ppo/mean_scores", 0.0)
+            kl_val = stats.get("objective/kl", 0.0)
+            print(f"PPO Epoch {epoch} | mean_reward={mean_score:.3f} | kl={kl_val:.3f}")
+
+    ppo_model.save_pretrained(f"{output_dir}/final")
+    tokenizer.save_pretrained(f"{output_dir}/final")
+    return ppo_trainer
