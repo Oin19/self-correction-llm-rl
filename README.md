@@ -58,33 +58,6 @@ results/      Metrics, logs, and figures (large outputs kept out of Git)
 checkpoints/  Checkpoint instructions; model weights are not committed
 ```
 
-## Team Workflow
-
-This repository uses a review-first workflow. The `main` branch is the stable branch and should not receive direct implementation pushes from contributors.
-
-### Junior 1 — Model & Training
-
-Owns model loading, generation, SFT, PPO, DPO, training configuration, and checkpoint handling.
-
-### Junior 2 — Data, Execution & Evaluation
-
-Owns dataset preparation, sandboxed execution, feedback extraction, debugging trajectories, reward computation, metrics, and evaluation.
-
-### Co-Lead
-
-Owns research direction, experiment design, scientific validation, review of pull requests, reproducibility checks, results interpretation, and final integration.
-
-## Branch Rules
-
-Use feature branches for implementation and open a Pull Request into `main` for review.
-
-Recommended naming:
-
-- `junior1/feature-name`
-- `junior2/feature-name`
-- `research/experiment-name`
-
-Do not commit model weights, private credentials, large raw datasets, or generated checkpoint files to this repository.
 
 ## Status
 
