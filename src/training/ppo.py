@@ -76,12 +76,16 @@ def run_ppo_training(
         target_kl=target_kl,
     )
 
+    def ppo_collate_fn(data):
+        return {key: [d[key] for d in data] for key in data[0]}
+
     ppo_trainer = PPOTrainer(
         config=ppo_config,
         model=ppo_model,
         ref_model=None,  # TRL handles reference policy for PEFT
         tokenizer=tokenizer,
         dataset=dataset,
+        data_collator=ppo_collate_fn,
     )
 
     generation_kwargs = {
@@ -101,7 +105,10 @@ def run_ppo_training(
             step_count += 1
             print(f"   [Step {step_count}/{total_batches}] Generating code & executing in sandbox...", flush=True)
 
-            query_tensors = [q for q in batch["input_ids"]]
+            query_tensors = [
+                torch.tensor(q, dtype=torch.long) if not isinstance(q, torch.Tensor) else q
+                for q in batch["input_ids"]
+            ]
             response_tensors = ppo_trainer.generate(
                 query_tensors,
                 **generation_kwargs,
