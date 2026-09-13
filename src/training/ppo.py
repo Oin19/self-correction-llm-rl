@@ -35,7 +35,7 @@ def run_ppo_training(
     gradient_accumulation_steps: int = 4,
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
-    max_steps: int = 20,
+    max_steps: int = 10,
 ):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -84,7 +84,7 @@ def run_ppo_training(
     )
 
     generation_kwargs = {
-        "max_new_tokens": 256,
+        "max_new_tokens": 128,
         "do_sample": True,
         "top_p": 0.95,
         "pad_token_id": tokenizer.pad_token_id,
@@ -113,7 +113,7 @@ def run_ppo_training(
             mean_score = stats.get("ppo/mean_scores", 0.0)
             kl_val = stats.get("objective/kl", 0.0)
             step_count += 1
-            print(f"PPO Batch {step_count}/{total_batches} | mean_reward={mean_score:.3f} | kl={kl_val:.3f}")
+            print(f"PPO Batch {step_count}/{total_batches} | mean_reward={mean_score:.3f} | kl={kl_val:.3f}", flush=True)
 
             if max_steps and step_count >= max_steps:
                 break
