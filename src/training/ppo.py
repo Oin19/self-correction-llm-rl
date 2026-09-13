@@ -96,20 +96,20 @@ def run_ppo_training(
 
     for epoch in range(num_epochs):
         for batch in ppo_trainer.dataloader:
-            queries = batch["input_ids"]
-            responses = ppo_trainer.generate(
-                queries,
+            query_tensors = [q for q in batch["input_ids"]]
+            response_tensors = ppo_trainer.generate(
+                query_tensors,
                 **generation_kwargs,
             )
 
             rewards = []
-            for q, r in zip(queries, responses):
+            for q, r in zip(query_tensors, response_tensors):
                 code = tokenizer.decode(r, skip_special_tokens=True)
                 result = run_code(code)
                 reward_val = compute_reward(result["status"], 0, 1)
                 rewards.append(torch.tensor(reward_val, dtype=torch.float32))
 
-            stats = ppo_trainer.step(queries, responses, rewards)
+            stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
             mean_score = stats.get("ppo/mean_scores", 0.0)
             kl_val = stats.get("objective/kl", 0.0)
             step_count += 1
