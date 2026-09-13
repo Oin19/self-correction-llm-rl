@@ -142,16 +142,16 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - `per_device_batch_size`: `2`
   - `gradient_accumulation_steps`: `4` (Effective batch size: `8`)
   - `learning_rate`: `2e-5`
-  - `runtime`: `24m 22s`
+  - `runtime`: `23m 03s`
 
 ### SFT Training Loss Trajectory
 | Step | Training Loss |
 | :--- | :--- |
-| **50** | `1.343351` |
-| **100** | `1.268777` |
-| **150** | `1.220009` |
-| **200** | `1.181134` |
-| **250** | **`1.200138`** |
+| **50** | `1.344050` |
+| **100** | `1.270391` |
+| **150** | `1.220787` |
+| **200** | `1.181776` |
+| **250** | **`1.200734`** |
 
 - **Checkpoint Saved**: `./checkpoints/sft/final`
 - **Status**: **SFT Training Completed Successfully**
@@ -176,6 +176,13 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **APPS Inference Generation**:
   - Generated candidate solutions for 3 APPS problem prompts (`Polycarp binary words`, `Mikhail Cartesian plane`, `Three sequences`).
   - *Note*: Inference generation confirms adapter weight integration and prompt decoding; actual Pass@1 correctness validation requires sandboxed test-case execution in evaluation phase (Notebook 07).
-- **Execution Evidence**:
-  ![Kaggle SFT Checkpoint Verification Screenshot](file:///C:/Users/rajde/.gemini/antigravity/brain/dd48c8ed-56a4-430e-b61d-8a8ffb142a78/.user_uploaded/media_1789319758927.png)
+
+### Execution Evidence
+- **Link**: [executed Kaggle Notebook 4](https://www.kaggle.com/code/rajdeepbhowmick/notebook4)
+- **Screenshots**:
+  - **SFT Training Run & Loss Trajectory**:
+    ![Kaggle SFT Training Run Output](file:///C:/Users/rajde/.gemini/antigravity/brain/dd48c8ed-56a4-430e-b61d-8a8ffb142a78/.user_uploaded/media_1789322935297.png)
+  - **Checkpoint Files + LoRA Config + Successful Reload + 3 APPS Inference Output**:
+    ![Kaggle Checkpoint Verification & Inference Output](file:///C:/Users/rajde/.gemini/antigravity/brain/dd48c8ed-56a4-430e-b61d-8a8ffb142a78/.user_uploaded/media_1789322941841.png)
+
 - **Verification Status**: **Checkpoint verification completed successfully: adapter files, LoRA configuration, model reload, and inference generation verified.**
