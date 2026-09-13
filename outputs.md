@@ -43,8 +43,8 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 
 ### Step 1: Environment & Module Setup
 - **Status**: SUCCESS
-- **Prepared Path**: Copied `src` to `/kaggle/working/src` and patched `loader.py` and `dpo.py` in-memory.
-- **Environment**: Modules initialized successfully.
+- **Prepared Path**: Copied `src` to `/kaggle/working/src` and patched `debug_loop.py`, `loader.py`, and `dpo.py` in-memory.
+- **Environment**: Modules patched & initialized successfully (`SUCCESS: Prepared working copy of 'src' at /kaggle/working/src`).
 
 ### Step 2: Synthetic Bug Injection Demo
 - **`[SYNTAX]`**: Syntax Error — Removed first colon in file.
@@ -54,11 +54,15 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 
 ### Step 3: Multi-Turn Agentic Debugging Loop ($K=3$) (Verification Check V2)
 - **Model**: `deepseek-ai/deepseek-coder-1.3b-instruct` (FP16 precision)
-- **Benchmark**: `openai_humaneval` (Problem 0: `has_close_elements`)
-- **Rollout Outcome**:
-  - **Turn 1 Status**: `AC` (Passed execution on first attempt)
-  - **Loop Termination**: Early exit on Turn 1 upon AC.
-- **Verification Check V2 Status**: **PASSED**
+- **Benchmark**: `openai_humaneval`
+- **Part A (Controlled Bug-Injection Self-Correction)**:
+  - **Injected Bug**: `Logic Error: Replaced '+' with '-'`
+  - **Turn 1 Status**: `AC` (dry-run definition check)
+  - **Status**: Verification Check V2 Part A completed.
+- **Part B (Natural Zero-Shot Failure Self-Correction)**:
+  - **Problem**: `make_palindrome` (`openai_humaneval[10]`)
+  - **Turn 1 Status**: `AC`
+  - **Status**: Verification Check V2 Part B completed.
 
 ### Step 4: Execution Reward Function Verification
 - **Dense Rewards**:

@@ -27,41 +27,57 @@ def build_prompt(problem: str, prev_code: str = None, traceback: str = None) -> 
         )
 
 
-def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, K: int = 3) -> list:
+def agentic_debug_loop(
+    model,
+    tokenizer,
+    problem: str,
+    test_cases: list = None,
+    K: int = 3,
+    initial_code: str = None,
+) -> list:
     """Run up to K debugging turns with execution feedback.
 
-    Returns a list of dicts: [{'turn': t, 'code': c, 'result': r}, ...]
+    If initial_code is provided, Turn 1 evaluates initial_code directly,
+    enabling controlled verification of failed -> feedback -> corrected -> AC trajectories.
+
+    Returns a list of dicts: [{'turn': t, 'prompt': p, 'code': c, 'result': r}, ...]
     """
     history = []
-    code, traceback = None, ""
+    code = initial_code
+    traceback = ""
     device = next(model.parameters()).device
     test_cases = test_cases or []
 
     for turn in range(K):
-        prompt = build_prompt(problem, code, traceback)
-        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+        if turn == 0 and code is not None:
+            # Turn 1 with explicit initial code (e.g. injected buggy code)
+            prompt = build_prompt(problem)
+        else:
+            # Turn 1 zero-shot OR Turn 2+ feedback prompt
+            prompt = build_prompt(problem, code, traceback)
+            inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
-        with torch.no_grad():
-            output = model.generate(
-                **inputs,
-                max_new_tokens=512,
-                temperature=0.2 if turn == 0 else 1.0,
-                do_sample=(turn > 0),
-                top_p=0.95,
-                pad_token_id=tokenizer.pad_token_id,
-            )
+            with torch.no_grad():
+                output = model.generate(
+                    **inputs,
+                    max_new_tokens=512,
+                    temperature=0.2 if turn == 0 else 1.0,
+                    do_sample=(turn > 0),
+                    top_p=0.95,
+                    pad_token_id=tokenizer.pad_token_id,
+                )
 
-        full = tokenizer.decode(output[0], skip_special_tokens=True)
-        code = extract_code_block(full, prompt)
+            full = tokenizer.decode(output[0], skip_special_tokens=True)
+            code = extract_code_block(full, prompt)
 
         full_code = code + "\n" + "\n".join(test_cases) if test_cases else code
         result = run_code(full_code)
 
-        history.append({"turn": turn + 1, "code": code, "result": result})
+        history.append({"turn": turn + 1, "prompt": prompt, "code": code, "result": result})
 
         if result["status"] == "AC":
             break
-        traceback = result.get("traceback", "")
+        traceback = result.get("traceback", "") or result.get("output", "")
 
     return history
 
