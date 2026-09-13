@@ -98,6 +98,9 @@ def run_ppo_training(
     print(f"-> [4/4] Starting PPO Rollout Optimization ({total_batches} steps max)...", flush=True)
     for epoch in range(num_epochs):
         for batch in ppo_trainer.dataloader:
+            step_count += 1
+            print(f"   [Step {step_count}/{total_batches}] Generating code & executing in sandbox...", flush=True)
+
             query_tensors = [q for q in batch["input_ids"]]
             response_tensors = ppo_trainer.generate(
                 query_tensors,
@@ -114,8 +117,7 @@ def run_ppo_training(
             stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
             mean_score = stats.get("ppo/mean_scores", 0.0)
             kl_val = stats.get("objective/kl", 0.0)
-            step_count += 1
-            print(f"   [Step {step_count}/{total_batches}] mean_reward={mean_score:.3f} | kl={kl_val:.3f}", flush=True)
+            print(f"   ✓ Completed Step {step_count}/{total_batches} | mean_reward={mean_score:.3f} | kl={kl_val:.3f}", flush=True)
 
             if max_steps and step_count >= max_steps:
                 break
