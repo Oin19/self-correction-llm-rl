@@ -155,3 +155,27 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 
 - **Checkpoint Saved**: `./checkpoints/sft/final`
 - **Status**: **SFT Training Completed Successfully**
+
+### Step 4: Checkpoint Verification & Adapter Reload Test
+- **Checkpoint Directory**: `./checkpoints/sft/final`
+- **Artifacts & File Sizes**:
+  - `adapter_config.json`: `0.00 MB`
+  - `adapter_model.safetensors`: `12.01 MB`
+  - `chat_template.jinja`: `0.00 MB`
+  - `tokenizer.json`: `2.18 MB`
+  - `tokenizer_config.json`: `0.00 MB`
+  - `README.md`: `0.00 MB`
+- **LoRA Configuration Verification**:
+  - `r`: `16`
+  - `lora_alpha`: `32`
+  - `target_modules`: `['v_proj', 'q_proj']`
+  - `peft_type`: `PeftType.LORA`
+- **Model & Adapter Reload**:
+  - `PeftModel.from_pretrained(base_model, "./checkpoints/sft/final")` loaded successfully without error.
+  - *Note*: `pad_token_id` and `torch_dtype` messages in Kaggle output log are standard PyTorch/Transformers warnings, not errors.
+- **APPS Inference Generation**:
+  - Generated candidate solutions for 3 APPS problem prompts (`Polycarp binary words`, `Mikhail Cartesian plane`, `Three sequences`).
+  - *Note*: Inference generation confirms adapter weight integration and prompt decoding; actual Pass@1 correctness validation requires sandboxed test-case execution in evaluation phase (Notebook 07).
+- **Execution Evidence**:
+  ![Kaggle SFT Checkpoint Verification Screenshot](file:///C:/Users/rajde/.gemini/antigravity/brain/dd48c8ed-56a4-430e-b61d-8a8ffb142a78/.user_uploaded/media_1789319758927.png)
+- **Verification Status**: **Checkpoint verification completed successfully: adapter files, LoRA configuration, model reload, and inference generation verified.**
