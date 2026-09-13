@@ -1,6 +1,11 @@
 """PPO training entry points with execution-guided rewards."""
 
+import gc
 import torch
+from transformers import logging as tf_logging
+
+tf_logging.set_verbosity_error()
+
 try:
     from trl import AutoModelForCausalLMWithValueHead
 except ImportError:
@@ -23,14 +28,18 @@ def run_ppo_training(
     tokenizer,
     dataset,
     output_dir: str = "./checkpoints/ppo",
-    num_epochs: int = 10,
+    num_epochs: int = 1,
     learning_rate: float = 1e-6,
-    batch_size: int = 16,
-    mini_batch_size: int = 4,
+    batch_size: int = 4,
+    mini_batch_size: int = 1,
     gradient_accumulation_steps: int = 4,
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
+    max_steps: int = 20,
 ):
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
     def tokenize_ppo_prompt(example):
         problem = example.get("question", example.get("prompt", ""))
         prompt_text = f"### Problem:\n{problem}\n\n### Solution:\n```python\n"
@@ -40,7 +49,6 @@ def run_ppo_training(
     if "input_ids" not in dataset.column_names:
         dataset = dataset.map(tokenize_ppo_prompt, remove_columns=dataset.column_names)
 
-    import gc
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -50,6 +58,11 @@ def run_ppo_training(
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
         trust_remote_code=True,
     )
+
+    if hasattr(ppo_model, "config"):
+        ppo_model.config.pad_token_id = tokenizer.pad_token_id
+    if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
+        ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
     ppo_config = PPOConfig(
         model_name=sft_model_path,
@@ -70,14 +83,23 @@ def run_ppo_training(
         dataset=dataset,
     )
 
+    generation_kwargs = {
+        "max_new_tokens": 256,
+        "do_sample": True,
+        "top_p": 0.95,
+        "pad_token_id": tokenizer.pad_token_id,
+        "eos_token_id": tokenizer.eos_token_id,
+    }
+
+    step_count = 0
+    total_batches = min(len(ppo_trainer.dataloader), max_steps) if max_steps else len(ppo_trainer.dataloader)
+
     for epoch in range(num_epochs):
         for batch in ppo_trainer.dataloader:
             queries = batch["input_ids"]
             responses = ppo_trainer.generate(
                 queries,
-                max_new_tokens=512,
-                temperature=1.0,
-                top_p=0.95,
+                **generation_kwargs,
             )
 
             rewards = []
@@ -90,7 +112,13 @@ def run_ppo_training(
             stats = ppo_trainer.step(queries, responses, rewards)
             mean_score = stats.get("ppo/mean_scores", 0.0)
             kl_val = stats.get("objective/kl", 0.0)
-            print(f"PPO Epoch {epoch} | mean_reward={mean_score:.3f} | kl={kl_val:.3f}")
+            step_count += 1
+            print(f"PPO Batch {step_count}/{total_batches} | mean_reward={mean_score:.3f} | kl={kl_val:.3f}")
+
+            if max_steps and step_count >= max_steps:
+                break
+        if max_steps and step_count >= max_steps:
+            break
 
     ppo_model.save_pretrained(f"{output_dir}/final")
     tokenizer.save_pretrained(f"{output_dir}/final")
