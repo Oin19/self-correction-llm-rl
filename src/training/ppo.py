@@ -1,7 +1,18 @@
 """PPO training entry points with execution-guided rewards."""
 
 import torch
-from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
+try:
+    from trl import AutoModelForCausalLMWithValueHead
+except ImportError:
+    try:
+        from trl.models import AutoModelForCausalLMWithValueHead
+    except ImportError:
+        from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
+
+try:
+    from trl import PPOConfig, PPOTrainer
+except ImportError:
+    from trl.trainer import PPOConfig, PPOTrainer
 
 from src.execution.executor import run_code
 from src.rewards.execution_reward import compute_reward
