@@ -42,7 +42,7 @@ def run_ppo_training(
     def tokenize_ppo_prompt(example):
         problem = example.get("question", example.get("prompt", ""))
         prompt_text = f"### Problem:\n{problem}\n\n### Solution:\n```python\n"
-        tokens = tokenizer(prompt_text, truncation=True, max_length=512, padding="max_length")
+        tokens = tokenizer(prompt_text, truncation=True, max_length=512)
         return {"input_ids": tokens["input_ids"]}
 
     if "input_ids" not in dataset.column_names:
@@ -110,7 +110,7 @@ def run_ppo_training(
             rewards = []
             for q, r in zip(query_tensors, response_tensors):
                 code = tokenizer.decode(r, skip_special_tokens=True)
-                result = run_code(code)
+                result = run_code(code, timeout=3)
                 reward_val = compute_reward(result["status"], 0, 1)
                 rewards.append(torch.tensor(reward_val, dtype=torch.float32))
 
