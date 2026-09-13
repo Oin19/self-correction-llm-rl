@@ -59,6 +59,9 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **Error Distribution**: `{'AC': 1.0}`
 - **Verification Check V1 Status**: **PASSED**
 
+### Execution Evidence
+- **Link**: [executed Kaggle Notebook 2](https://www.kaggle.com/code/rajdeepbhowmick/notebook2)
+
 ---
 
 ## Notebook 03: Iterative Debugging Loop & Execution Reward Design
@@ -115,6 +118,9 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - **Chosen Code (`AC`)**: `separate_paren_groups(paren_string: str) -> List[str]`
   - **Rejected Code (`WA/CE`)**: `separate_paren_groups(paren_string: str) -> List[str]` (failed attempt)
 - **Status**: Preference collection verified & ready for DPO.
+
+### Execution Evidence
+- **Link**: [executed Kaggle Notebook 3](https://www.kaggle.com/code/rajdeepbhowmick/notebook3)
 
 ---
 
