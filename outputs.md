@@ -1,5 +1,28 @@
 # Project Notebook Execution Outputs Log
 
+## Notebook 01: Environment Setup & Execution Sandbox
+**Date**: 2026-09-12
+
+### Step 1: Environment & Library Verification
+- **Python Version**: `3.12.13`
+- **PyTorch Version**: `2.10.0+cu128`
+- **CUDA Device**: `Tesla T4` (Available)
+- **TRL Version**: `1.13.0`
+- **Status**: All core libraries loaded successfully (`SUCCESS`)
+
+### Step 2: Python Execution Sandbox (Verification Checks V3 & V4)
+- **Module Discovery**: Found `src` at `/kaggle/input/datasets/aihikbasu/main-file/self-correction-llm-rl`
+- **Sandbox Test Result (AC)**: `{'status': <ExecutionStatus.AC: 'AC'>, 'output': '4', 'traceback': ''}`
+- **Verification Status**: **Verification Checks V3 & V4 PASSED**
+
+### Step 3: Dataset Loading & Preparation
+- **APPS Benchmark**: Downloaded 2,000 problem pairs using Parquet revision (`revision='refs/convert/parquet'`)
+- **HumanEval Benchmark**: 164 test examples loaded
+- **MBPP Benchmark**: 500 test examples loaded
+- **Status**: Datasets loaded and verified successfully
+
+---
+
 ## Notebook 02: Base Model & Zero-Shot Baseline Evaluation
 **Date**: 2026-09-13
 
