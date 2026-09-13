@@ -31,8 +31,25 @@ def run_ppo_training(
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
 ):
-    """Run PPO reinforcement learning guided by python sandbox execution output."""
-    ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(sft_model_path)
+    def tokenize_ppo_prompt(example):
+        problem = example.get("question", example.get("prompt", ""))
+        prompt_text = f"### Problem:\n{problem}\n\n### Solution:\n```python\n"
+        tokens = tokenizer(prompt_text, truncation=True, max_length=512, padding="max_length")
+        return {"input_ids": tokens["input_ids"]}
+
+    if "input_ids" not in dataset.column_names:
+        dataset = dataset.map(tokenize_ppo_prompt, remove_columns=dataset.column_names)
+
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
+        sft_model_path,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        trust_remote_code=True,
+    )
 
     ppo_config = PPOConfig(
         model_name=sft_model_path,
@@ -48,7 +65,7 @@ def run_ppo_training(
     ppo_trainer = PPOTrainer(
         config=ppo_config,
         model=ppo_model,
-        ref_model=None,  # TRL creates a frozen reference copy
+        ref_model=None,  # TRL handles reference policy for PEFT
         tokenizer=tokenizer,
         dataset=dataset,
     )
