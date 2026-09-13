@@ -1,10 +1,8 @@
 """PPO training entry points with execution-guided rewards."""
 
 import gc
+import sys
 import torch
-from transformers import logging as tf_logging
-
-tf_logging.set_verbosity_error()
 
 try:
     from trl import AutoModelForCausalLMWithValueHead
@@ -37,6 +35,7 @@ def run_ppo_training(
     target_kl: float = 6.0,
     max_steps: int = 10,
 ):
+    print("-> [1/4] Preparing PPO dataset and tokenizer...", flush=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -53,6 +52,7 @@ def run_ppo_training(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    print(f"-> [2/4] Loading model '{sft_model_path}' with Value Head into VRAM...", flush=True)
     ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
         sft_model_path,
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
@@ -64,6 +64,7 @@ def run_ppo_training(
     if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
         ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
+    print("-> [3/4] Initializing TRL PPOTrainer...", flush=True)
     ppo_config = PPOConfig(
         model_name=sft_model_path,
         learning_rate=learning_rate,
@@ -94,6 +95,7 @@ def run_ppo_training(
     step_count = 0
     total_batches = min(len(ppo_trainer.dataloader), max_steps) if max_steps else len(ppo_trainer.dataloader)
 
+    print(f"-> [4/4] Starting PPO Rollout Optimization ({total_batches} steps max)...", flush=True)
     for epoch in range(num_epochs):
         for batch in ppo_trainer.dataloader:
             query_tensors = [q for q in batch["input_ids"]]
@@ -113,13 +115,14 @@ def run_ppo_training(
             mean_score = stats.get("ppo/mean_scores", 0.0)
             kl_val = stats.get("objective/kl", 0.0)
             step_count += 1
-            print(f"PPO Batch {step_count}/{total_batches} | mean_reward={mean_score:.3f} | kl={kl_val:.3f}", flush=True)
+            print(f"   [Step {step_count}/{total_batches}] mean_reward={mean_score:.3f} | kl={kl_val:.3f}", flush=True)
 
             if max_steps and step_count >= max_steps:
                 break
         if max_steps and step_count >= max_steps:
             break
 
+    print(f"-> Saving final PPO adapter checkpoint to {output_dir}/final...", flush=True)
     ppo_model.save_pretrained(f"{output_dir}/final")
     tokenizer.save_pretrained(f"{output_dir}/final")
     return ppo_trainer
