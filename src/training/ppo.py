@@ -28,9 +28,9 @@ def run_ppo_training(
     output_dir: str = "./checkpoints/ppo",
     num_epochs: int = 1,
     learning_rate: float = 1e-6,
-    batch_size: int = 2,
+    batch_size: int = 1,
     mini_batch_size: int = 1,
-    gradient_accumulation_steps: int = 2,
+    gradient_accumulation_steps: int = 1,
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
     max_steps: int = 10,
@@ -43,7 +43,7 @@ def run_ppo_training(
     def tokenize_ppo_prompt(example):
         problem = example.get("question", example.get("prompt", ""))
         prompt_text = f"### Problem:\n{problem}\n\n### Solution:\n```python\n"
-        tokens = tokenizer(prompt_text, truncation=True, max_length=512)
+        tokens = tokenizer(prompt_text, truncation=True, max_length=256)
         return {"input_ids": tokens["input_ids"]}
 
     if "input_ids" not in dataset.column_names:
@@ -133,7 +133,7 @@ def run_ppo_training(
     )
 
     generation_kwargs = {
-        "max_new_tokens": 128,
+        "max_new_tokens": 64,
         "do_sample": True,
         "top_p": 0.95,
         "pad_token_id": tokenizer.pad_token_id,
