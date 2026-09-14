@@ -36,6 +36,7 @@ def run_ppo_training(
     max_steps: int = 10,
 ):
     print("-> [1/4] Preparing PPO dataset and tokenizer...", flush=True)
+    tokenizer.padding_side = "left"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
