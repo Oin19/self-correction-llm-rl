@@ -28,9 +28,9 @@ def run_ppo_training(
     output_dir: str = "./checkpoints/ppo",
     num_epochs: int = 1,
     learning_rate: float = 1e-6,
-    batch_size: int = 4,
+    batch_size: int = 2,
     mini_batch_size: int = 1,
-    gradient_accumulation_steps: int = 4,
+    gradient_accumulation_steps: int = 2,
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
     max_steps: int = 10,
@@ -153,10 +153,11 @@ def run_ppo_training(
                 q.squeeze() if isinstance(q, torch.Tensor) and q.dim() > 1 else (torch.tensor(q, dtype=torch.long) if not isinstance(q, torch.Tensor) else q)
                 for q in batch["input_ids"]
             ]
-            response_tensors = ppo_trainer.generate(
-                query_tensors,
-                **generation_kwargs,
-            )
+            with torch.no_grad():
+                response_tensors = ppo_trainer.generate(
+                    query_tensors,
+                    **generation_kwargs,
+                )
 
             rewards = []
             for q, r in zip(query_tensors, response_tensors):
@@ -164,6 +165,10 @@ def run_ppo_training(
                 result = run_code(code, timeout=3)
                 reward_val = compute_reward(result["status"], 0, 1)
                 rewards.append(torch.tensor(reward_val, dtype=torch.float32))
+
+            # Free generation KV-cache memory before PPO forward/backward step
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
             stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
             mean_score = stats.get("ppo/mean_scores", 0.0)
