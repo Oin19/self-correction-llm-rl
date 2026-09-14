@@ -48,16 +48,18 @@ def run_ppo_training(
     if "input_ids" not in dataset.column_names:
         dataset = dataset.map(tokenize_ppo_prompt, remove_columns=dataset.column_names)
 
-    # Force clear lingering CUDA memory
+    # Clear CUDA memory
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
-    print(f"-> [2/4] Loading model '{sft_model_path}' with Value Head into VRAM...", flush=True)
+    print(f"-> [2/4] Loading model '{sft_model_path}' with Value Head into CPU memory first...", flush=True)
+    # Load on CPU first to prevent Accelerate double-VRAM allocation on load
     ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
         sft_model_path,
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        device_map={"": "cpu"} if torch.cuda.is_available() else None,
         trust_remote_code=True,
     )
 
@@ -66,8 +68,7 @@ def run_ppo_training(
     if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
         ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-    # CRITICAL VRAM OPTIMIZATION: Freeze base model parameters so Adam optimizer
-    # allocates states ONLY for LoRA adapter + Value Head (32MB instead of 10.4GB!)
+    # Freeze base model parameters
     if hasattr(ppo_model, "pretrained_model"):
         for param in ppo_model.pretrained_model.parameters():
             param.requires_grad = False
@@ -76,7 +77,7 @@ def run_ppo_training(
         if "lora_" in name or "v_head" in name or "summary" in name or "score" in name:
             param.requires_grad = True
 
-    # Enable Gradient Checkpointing to cut activation VRAM footprint
+    # Enable Gradient Checkpointing
     if hasattr(ppo_model, "gradient_checkpointing_enable"):
         try:
             ppo_model.gradient_checkpointing_enable()
@@ -87,6 +88,10 @@ def run_ppo_training(
             ppo_model.pretrained_model.gradient_checkpointing_enable()
         except Exception:
             pass
+
+    # Build optimizer explicitly for trainable parameters ONLY
+    trainable_params = [p for p in ppo_model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(trainable_params, lr=learning_rate)
 
     print("-> [3/4] Initializing TRL PPOTrainer...", flush=True)
     ppo_config = PPOConfig(
@@ -106,9 +111,10 @@ def run_ppo_training(
     ppo_trainer = PPOTrainer(
         config=ppo_config,
         model=ppo_model,
-        ref_model=None,  # TRL handles reference policy for PEFT
+        ref_model=None,
         tokenizer=tokenizer,
         dataset=dataset,
+        optimizer=optimizer,
         data_collator=ppo_collate_fn,
     )
 
