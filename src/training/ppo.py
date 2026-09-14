@@ -1,6 +1,7 @@
 """PPO training entry points with execution-guided rewards."""
 
 import gc
+import os
 import sys
 import torch
 
@@ -42,9 +43,9 @@ def run_ppo_training(
     output_dir: str = "./checkpoints/ppo",
     num_epochs: int = 1,
     learning_rate: float = 1e-6,
-    batch_size: int = 1,
+    batch_size: int = 2,
     mini_batch_size: int = 1,
-    gradient_accumulation_steps: int = 1,
+    gradient_accumulation_steps: int = 2,
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
     max_steps: int = 10,
@@ -67,16 +68,25 @@ def run_ppo_training(
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()
 
-    print(f"-> [2/4] Loading model '{sft_model_path}' with Value Head into CPU memory first...", flush=True)
-    # Load on CPU first to prevent Accelerate double-VRAM allocation on load
-    # Force eager attention implementation to bypass PyTorch SDPA 4D attention mask expansion shape mismatch bug in TRL generate()
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    print(f"-> [2/4] Available GPUs: {num_gpus}. Loading PPO model with Value Head...", flush=True)
+
+    # Multi-GPU (T4 x2) distribution strategy
+    if num_gpus >= 2:
+        print("   Multi-GPU detected! Distributing Policy Model across GPU 0 & GPU 1 using device_map='auto'", flush=True)
+        device_map = "auto"
+    elif num_gpus == 1:
+        print("   Single GPU detected! Using cuda:0 with memory-efficient precision", flush=True)
+        device_map = {"": 0}
+    else:
+        device_map = None
+
     try:
         ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
             sft_model_path,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map={"": "cpu"} if torch.cuda.is_available() else None,
+            device_map=device_map,
             trust_remote_code=True,
             attn_implementation="eager",
         )
@@ -84,19 +94,24 @@ def run_ppo_training(
         ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
             sft_model_path,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map={"": "cpu"} if torch.cuda.is_available() else None,
+            device_map=device_map,
             trust_remote_code=True,
         )
 
     if hasattr(ppo_model, "config"):
         ppo_model.config.pad_token_id = tokenizer.pad_token_id
-        ppo_model.config._attn_implementation = "eager"
+        ppo_model.config.use_cache = True
     if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
         ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
-    if hasattr(ppo_model, "pretrained_model") and hasattr(ppo_model.pretrained_model, "config"):
-        ppo_model.pretrained_model.config._attn_implementation = "eager"
 
-    # Freeze base model parameters
+    # Enable Gradient Checkpointing to save VRAM
+    if hasattr(ppo_model, "pretrained_model") and hasattr(ppo_model.pretrained_model, "gradient_checkpointing_enable"):
+        try:
+            ppo_model.pretrained_model.gradient_checkpointing_enable()
+        except Exception:
+            pass
+
+    # Freeze base model parameters so only LoRA + Value Head are optimized
     if hasattr(ppo_model, "pretrained_model"):
         for param in ppo_model.pretrained_model.parameters():
             param.requires_grad = False
@@ -105,19 +120,6 @@ def run_ppo_training(
         if "lora_" in name or "v_head" in name or "summary" in name or "score" in name:
             param.requires_grad = True
 
-    # Enable Gradient Checkpointing
-    if hasattr(ppo_model, "gradient_checkpointing_enable"):
-        try:
-            ppo_model.gradient_checkpointing_enable()
-        except Exception:
-            pass
-    elif hasattr(ppo_model, "pretrained_model") and hasattr(ppo_model.pretrained_model, "gradient_checkpointing_enable"):
-        try:
-            ppo_model.pretrained_model.gradient_checkpointing_enable()
-        except Exception:
-            pass
-
-    # Build optimizer explicitly for trainable parameters ONLY
     trainable_params = [p for p in ppo_model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=learning_rate)
 
@@ -139,7 +141,7 @@ def run_ppo_training(
     ppo_trainer = PPOTrainer(
         config=ppo_config,
         model=ppo_model,
-        ref_model=None,
+        ref_model=None,  # TRL manages ref_model using PEFT shared weights
         tokenizer=tokenizer,
         dataset=dataset,
         optimizer=optimizer,
@@ -180,7 +182,6 @@ def run_ppo_training(
                 reward_val = compute_reward(result["status"], 0, 1)
                 rewards.append(torch.tensor(reward_val, dtype=torch.float32))
 
-            # Free generation KV-cache memory before PPO forward/backward step
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
