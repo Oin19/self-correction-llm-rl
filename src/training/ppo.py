@@ -57,17 +57,30 @@ def run_ppo_training(
 
     print(f"-> [2/4] Loading model '{sft_model_path}' with Value Head into CPU memory first...", flush=True)
     # Load on CPU first to prevent Accelerate double-VRAM allocation on load
-    ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        sft_model_path,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-        device_map={"": "cpu"} if torch.cuda.is_available() else None,
-        trust_remote_code=True,
-    )
+    # Force eager attention implementation to bypass PyTorch SDPA 4D attention mask expansion shape mismatch bug in TRL generate()
+    try:
+        ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
+            sft_model_path,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map={"": "cpu"} if torch.cuda.is_available() else None,
+            trust_remote_code=True,
+            attn_implementation="eager",
+        )
+    except Exception:
+        ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
+            sft_model_path,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map={"": "cpu"} if torch.cuda.is_available() else None,
+            trust_remote_code=True,
+        )
 
     if hasattr(ppo_model, "config"):
         ppo_model.config.pad_token_id = tokenizer.pad_token_id
+        ppo_model.config._attn_implementation = "eager"
     if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
         ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
+    if hasattr(ppo_model, "pretrained_model") and hasattr(ppo_model.pretrained_model, "config"):
+        ppo_model.pretrained_model.config._attn_implementation = "eager"
 
     # Freeze base model parameters
     if hasattr(ppo_model, "pretrained_model"):
@@ -137,7 +150,7 @@ def run_ppo_training(
             print(f"   [Step {step_count}/{total_batches}] Generating code & executing in sandbox...", flush=True)
 
             query_tensors = [
-                torch.tensor(q, dtype=torch.long) if not isinstance(q, torch.Tensor) else q
+                q.squeeze() if isinstance(q, torch.Tensor) and q.dim() > 1 else (torch.tensor(q, dtype=torch.long) if not isinstance(q, torch.Tensor) else q)
                 for q in batch["input_ids"]
             ]
             response_tensors = ppo_trainer.generate(
