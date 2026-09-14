@@ -187,8 +187,8 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **Link**: [executed Kaggle Notebook 4](https://www.kaggle.com/code/rajdeepbhowmick/notebook4)
 - **Screenshots**:
   - **SFT Training Run & Loss Trajectory**:
-    ![Kaggle SFT Training Run Output](file:///C:/Users/rajde/.gemini/antigravity/brain/dd48c8ed-56a4-430e-b61d-8a8ffb142a78/.user_uploaded/media_1789322935297.png)
+    ![Kaggle SFT Training Run Output](docs/screenshots/sft_training_run.png)
   - **Checkpoint Files + LoRA Config + Successful Reload + 3 APPS Inference Output**:
-    ![Kaggle Checkpoint Verification & Inference Output](file:///C:/Users/rajde/.gemini/antigravity/brain/dd48c8ed-56a4-430e-b61d-8a8ffb142a78/.user_uploaded/media_1789322941841.png)
+    ![Kaggle Checkpoint Verification & Inference Output](docs/screenshots/sft_checkpoint_verification.png)
 
 - **Verification Status**: **Checkpoint verification completed successfully: adapter files, LoRA configuration, model reload, and inference generation verified.**
