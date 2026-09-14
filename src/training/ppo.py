@@ -28,9 +28,9 @@ def run_ppo_training(
     output_dir: str = "./checkpoints/ppo",
     num_epochs: int = 1,
     learning_rate: float = 1e-6,
-    batch_size: int = 4,
+    batch_size: int = 2,
     mini_batch_size: int = 1,
-    gradient_accumulation_steps: int = 4,
+    gradient_accumulation_steps: int = 2,
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
     max_steps: int = 10,
@@ -51,6 +51,7 @@ def run_ppo_training(
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
 
     print(f"-> [2/4] Loading model '{sft_model_path}' with Value Head into VRAM...", flush=True)
     ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
@@ -63,6 +64,18 @@ def run_ppo_training(
         ppo_model.config.pad_token_id = tokenizer.pad_token_id
     if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
         ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
+
+    # Enable Gradient Checkpointing to reduce VRAM memory footprint by ~70%
+    if hasattr(ppo_model, "gradient_checkpointing_enable"):
+        try:
+            ppo_model.gradient_checkpointing_enable()
+        except Exception:
+            pass
+    elif hasattr(ppo_model, "pretrained_model") and hasattr(ppo_model.pretrained_model, "gradient_checkpointing_enable"):
+        try:
+            ppo_model.pretrained_model.gradient_checkpointing_enable()
+        except Exception:
+            pass
 
     print("-> [3/4] Initializing TRL PPOTrainer...", flush=True)
     ppo_config = PPOConfig(
