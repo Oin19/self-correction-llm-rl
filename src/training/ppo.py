@@ -5,28 +5,31 @@ import sys
 import torch
 
 try:
-    from trl import AutoModelForCausalLMWithValueHead
-except (ImportError, AttributeError):
+    from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
+except Exception:
     try:
-        from trl.models import AutoModelForCausalLMWithValueHead
-    except (ImportError, AttributeError):
+        from trl import AutoModelForCausalLMWithValueHead
+    except Exception:
         try:
-            from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
-        except (ImportError, AttributeError):
+            from trl.models import AutoModelForCausalLMWithValueHead
+        except Exception:
             AutoModelForCausalLMWithValueHead = None
 
 try:
-    from trl import PPOConfig, PPOTrainer
-except (ImportError, AttributeError):
+    from trl.trainer.ppo_trainer import PPOTrainer
+except Exception:
     try:
-        from trl.trainer import PPOConfig, PPOTrainer
-    except (ImportError, AttributeError):
-        try:
-            from trl.trainer.ppo_trainer import PPOTrainer
-            from trl.trainer.ppo_config import PPOConfig
-        except (ImportError, AttributeError):
-            PPOConfig = None
-            PPOTrainer = None
+        from trl import PPOTrainer
+    except Exception:
+        PPOTrainer = None
+
+try:
+    from trl.trainer.ppo_config import PPOConfig
+except Exception:
+    try:
+        from trl import PPOConfig
+    except Exception:
+        PPOConfig = None
 
 from src.execution.executor import run_code
 from src.rewards.execution_reward import compute_reward
