@@ -4,7 +4,9 @@ import gc
 import os
 import sys
 import torch
+import torch.nn as nn
 
+# Robust TRL import ladder with custom PyTorch Fallback ValueHead class
 try:
     from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
 except Exception:
@@ -16,13 +18,54 @@ except Exception:
         except Exception:
             AutoModelForCausalLMWithValueHead = None
 
+if AutoModelForCausalLMWithValueHead is None:
+    from transformers import AutoModelForCausalLM
+
+    class AutoModelForCausalLMWithValueHead(nn.Module):
+        """Fallback Value Head model wrapper if TRL\'s class is unavailable in current TRL version."""
+        def __init__(self, pretrained_model):
+            super().__init__()
+            self.pretrained_model = pretrained_model
+            self.config = getattr(pretrained_model, "config", None)
+            hidden_size = getattr(self.config, "hidden_size", getattr(self.config, "d_model", 2048))
+            self.v_head = nn.Linear(hidden_size, 1)
+            self.summary_dropout = nn.Dropout(0.1)
+
+        @classmethod
+        def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
+            try:
+                base_model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path, **kwargs)
+            except Exception:
+                kwargs.pop("attn_implementation", None)
+                base_model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path, **kwargs)
+            return cls(base_model)
+
+        def forward(self, input_ids=None, attention_mask=None, **kwargs):
+            outputs = self.pretrained_model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True, **kwargs)
+            last_hidden_state = outputs.hidden_states[-1]
+            lm_logits = outputs.logits
+            value = self.v_head(self.summary_dropout(last_hidden_state)).squeeze(-1)
+            return (lm_logits, None, value)
+
+        def generate(self, *args, **kwargs):
+            return self.pretrained_model.generate(*args, **kwargs)
+
+        def save_pretrained(self, save_directory, **kwargs):
+            os.makedirs(save_directory, exist_ok=True)
+            if hasattr(self.pretrained_model, "save_pretrained"):
+                self.pretrained_model.save_pretrained(save_directory, **kwargs)
+            torch.save(self.v_head.state_dict(), os.path.join(save_directory, "v_head.bin"))
+
 try:
     from trl.trainer.ppo_trainer import PPOTrainer
 except Exception:
     try:
         from trl import PPOTrainer
     except Exception:
-        PPOTrainer = None
+        try:
+            from trl.trainer import PPOTrainer
+        except Exception:
+            PPOTrainer = None
 
 try:
     from trl.trainer.ppo_config import PPOConfig
@@ -30,7 +73,10 @@ except Exception:
     try:
         from trl import PPOConfig
     except Exception:
-        PPOConfig = None
+        try:
+            from trl.trainer import PPOConfig
+        except Exception:
+            PPOConfig = None
 
 from src.execution.executor import run_code
 from src.rewards.execution_reward import compute_reward
@@ -74,7 +120,7 @@ def run_ppo_training(
 
     # Multi-GPU (T4 x2) distribution strategy
     if num_gpus >= 2:
-        print("   Multi-GPU detected! Distributing Policy Model across GPU 0 & GPU 1 using device_map='auto'", flush=True)
+        print("   Multi-GPU detected! Distributing Policy Model across GPU 0 & GPU 1 using device_map=\'auto\'", flush=True)
         device_map = "auto"
     elif num_gpus == 1:
         print("   Single GPU detected! Using cuda:0 with memory-efficient precision", flush=True)
