@@ -28,9 +28,9 @@ def run_ppo_training(
     output_dir: str = "./checkpoints/ppo",
     num_epochs: int = 1,
     learning_rate: float = 1e-6,
-    batch_size: int = 2,
+    batch_size: int = 4,
     mini_batch_size: int = 1,
-    gradient_accumulation_steps: int = 2,
+    gradient_accumulation_steps: int = 4,
     init_kl_coef: float = 0.02,
     target_kl: float = 6.0,
     max_steps: int = 10,
@@ -66,7 +66,17 @@ def run_ppo_training(
     if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
         ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-    # Enable Gradient Checkpointing to cut activation VRAM footprint by ~70%
+    # CRITICAL VRAM OPTIMIZATION: Freeze base model parameters so Adam optimizer
+    # allocates states ONLY for LoRA adapter + Value Head (32MB instead of 10.4GB!)
+    if hasattr(ppo_model, "pretrained_model"):
+        for param in ppo_model.pretrained_model.parameters():
+            param.requires_grad = False
+
+    for name, param in ppo_model.named_parameters():
+        if "lora_" in name or "v_head" in name or "summary" in name or "score" in name:
+            param.requires_grad = True
+
+    # Enable Gradient Checkpointing to cut activation VRAM footprint
     if hasattr(ppo_model, "gradient_checkpointing_enable"):
         try:
             ppo_model.gradient_checkpointing_enable()
