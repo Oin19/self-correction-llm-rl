@@ -48,6 +48,7 @@ def run_ppo_training(
     if "input_ids" not in dataset.column_names:
         dataset = dataset.map(tokenize_ppo_prompt, remove_columns=dataset.column_names)
 
+    # Force clear lingering CUDA memory
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -65,7 +66,7 @@ def run_ppo_training(
     if hasattr(ppo_model, "generation_config") and ppo_model.generation_config is not None:
         ppo_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-    # Enable Gradient Checkpointing to reduce VRAM memory footprint by ~70%
+    # Enable Gradient Checkpointing to cut activation VRAM footprint by ~70%
     if hasattr(ppo_model, "gradient_checkpointing_enable"):
         try:
             ppo_model.gradient_checkpointing_enable()
