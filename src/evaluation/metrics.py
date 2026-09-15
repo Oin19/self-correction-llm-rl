@@ -4,6 +4,26 @@ from typing import Any, Dict, List
 from src.debugging.debug_loop import agentic_debug_loop
 
 
+def extract_eval_test_cases(example: dict) -> list:
+    """Extract executable test case list from evaluation dataset item (HumanEval, MBPP, APPS)."""
+    if "test" in example and isinstance(example["test"], str):
+        return [example["test"]]
+    
+    test_cases = example.get("test_cases", example.get("input_output", []))
+    if isinstance(test_cases, str):
+        try:
+            parsed = eval(test_cases)
+            if isinstance(parsed, dict):
+                return parsed.get("inputs", [])
+            elif isinstance(parsed, list):
+                return parsed
+        except Exception:
+            return []
+    elif isinstance(test_cases, list):
+        return test_cases
+    return []
+
+
 def evaluate(model, tokenizer, dataset, K: int = 3, label: str = "", debug_loop_fn=None) -> dict:
     """Compute Pass@1 and Fix@K metrics on an evaluation dataset."""
     if debug_loop_fn is None:
@@ -12,14 +32,7 @@ def evaluate(model, tokenizer, dataset, K: int = 3, label: str = "", debug_loop_
     pass1, fixk, total = 0, 0, len(dataset)
     for i, example in enumerate(dataset):
         problem = example.get("prompt", example.get("question", ""))
-        test_cases = example.get("test_cases", example.get("input_output", []))
-
-        if isinstance(test_cases, str):
-            try:
-                parsed = eval(test_cases)
-                test_cases = parsed.get("inputs", []) if isinstance(parsed, dict) else []
-            except Exception:
-                test_cases = []
+        test_cases = extract_eval_test_cases(example)
 
         history = debug_loop_fn(model, tokenizer, problem, test_cases, K=K)
         statuses = [h["result"]["status"] for h in history]
@@ -29,7 +42,7 @@ def evaluate(model, tokenizer, dataset, K: int = 3, label: str = "", debug_loop_
         if "AC" in statuses:
             fixk += 1
 
-        if (i + 1) % 20 == 0 or (i + 1) == total:
+        if (i + 1) % 5 == 0 or (i + 1) == total:
             current_pass1 = pass1 / (i + 1)
             current_fixk = fixk / (i + 1)
             print(f"{label} [{i+1}/{total}] Pass@1={current_pass1:.2%} Fix@{K}={current_fixk:.2%}")
@@ -103,4 +116,3 @@ def summarize_eval_metrics(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
         "error_distribution": calculate_error_distribution(sessions),
         "total_eval_samples": len(sessions),
     }
-
