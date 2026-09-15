@@ -17,7 +17,7 @@ except ImportError:
     resource = None
 
 
-def run_code(code: str, timeout: int = 8) -> dict:
+def run_code(code: str, timeout: int = 3) -> dict:
     """Safely run Python code and return status + output.
 
     Status codes:

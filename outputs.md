@@ -258,3 +258,65 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 
 ### Execution Evidence
 - **Link**: [executed Kaggle Notebook 5](https://www.kaggle.com/code/rajdeepbhowmick/notebook5)
+---
+
+## Notebook 06: Direct Preference Optimization (DPO) Training
+**Date**: 2026-09-15
+
+### Step 1: Environment Setup & Universal Path Resolution
+- **Dependencies Installed**: `trl`, `peft`, `bitsandbytes`, `accelerate`, `datasets`, `transformers`
+- **Path Resolution & Auto-Copy**: Copied `src` from `/kaggle/input/datasets/rajdeepbhowmick/self-correction-src/src` to `/kaggle/working/src`.
+- **In-Memory Patching**: Patched `src/models/loader.py` for multi-GPU distribution and `src/training/dpo.py` with `DPOTrainer` `processing_class` compatibility and APPS test-case execution parsing.
+- **Status**: `SUCCESS: Patched src/models/loader.py (Multi-GPU) and src/training/dpo.py! Environment initialized!`
+
+### Step 2: Preference Trajectory Pair Collection `(prompt, chosen, rejected)`
+- **Base Model**: `deepseek-ai/deepseek-coder-1.3b-instruct` loaded in FP16 precision with `device_map='auto'` across **GPU 0 & GPU 1** (`Multi-GPU detected! (2 GPUs available)`).
+- **Workarounds**: `torchao-0.10.0` uninstalled successfully (`Found existing installation: torchao 0.10.0`).
+- **APPS Benchmark**: Loaded `train[:100]` problems from APPS dataset (`revision='refs/convert/parquet'`). Filtered 100 non-empty problem items (`Prepared 100 APPS problems`).
+- **Test-Case Execution Rollout**: Executed multi-turn debug rollouts ($K=3$) using APPS test-case harness code parsing. Live progress logged every 5 problems (`[Progress: 5/100] ... [Progress: 100/100]`).
+- **Total Preference Pairs Generated**: `100` (`Total DPO preference pairs generated: 100`)
+
+### Step 3: Run DPO Training Loop
+- **Training Configuration**:
+  - `num_train_epochs`: `3` (Total Steps: `66`)
+  - `per_device_train_batch_size`: `4`
+  - `beta`: `0.1`
+  - `learning_rate`: `5e-5`
+  - `runtime`: `08:24` (8m 24s)
+- **DPO Training Loss Trajectory**:
+
+| Step | Training Loss |
+| :--- | :--- |
+| **10** | `0.573503` |
+| **20** | `0.310276` |
+| **30** | `0.147051` |
+| **40** | `0.063362` |
+| **50** | `0.030076` |
+| **60** | **`0.040510`** |
+
+- **Saved Checkpoint**: `./checkpoints/dpo/final`
+- **Status**: `DPO Training completed successfully! Saved final DPO adapter checkpoint to ./checkpoints/dpo/final`
+
+### Step 4: Checkpoint Verification & Adapter Reload Test
+- **Checkpoint Directory**: `./checkpoints/dpo/final`
+- **Artifacts & File Sizes**:
+  - `README.md`: `0.01 MB`
+  - `adapter_config.json`: `0.00 MB`
+  - `adapter_model.safetensors`: `12.01 MB`
+  - `chat_template.jinja`: `0.00 MB`
+  - `tokenizer.json`: `2.18 MB`
+  - `tokenizer_config.json`: `0.00 MB`
+  - `training_args.bin`: `0.01 MB`
+- **LoRA Configuration Verification**:
+  - `r`: `16`
+  - `lora_alpha`: `32`
+  - `target_modules`: `['v_proj', 'q_proj']`
+  - `peft_type`: `PeftType.LORA`
+- **Model & Adapter Reload**:
+  - `PeftModel.from_pretrained(base_model, "./checkpoints/dpo/final")` loaded successfully without error.
+- **APPS Inference Generation**:
+  - Generated candidate solutions for 3 APPS problem prompts (`Polycarp binary words`, `Mikhail Cartesian plane`, `Three sequences`).
+- **Verification Status**: **Checkpoint verification completed successfully: adapter files, LoRA configuration, model reload, and inference generation verified.**
+
+### Execution Evidence
+- **Link**: [executed Kaggle Notebook 6](https://www.kaggle.com/code/rajdeepbhowmick/notebook6)

@@ -23,16 +23,26 @@ def load_model_and_tokenizer(
     lora_dropout: float = 0.05,
     attach_lora: bool = True,
 ):
-    """Loads tokenizer and CausalLM model with 4-bit quantization and optional LoRA adapters."""
+    """Loads tokenizer and CausalLM model with quantization, multi-GPU distribution, and optional LoRA adapters."""
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     try:
-        import bitsandbytes  # check if bitsandbytes is working
+        import bitsandbytes
         has_bnb = True
     except (ImportError, Exception):
         has_bnb = False
+
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    if num_gpus >= 2:
+        print(f"Multi-GPU detected! ({num_gpus} GPUs available). Distributing model across GPU 0 & GPU 1 using device_map='auto'", flush=True)
+        device_map = "auto"
+    elif num_gpus == 1:
+        print("Single GPU detected! Using cuda:0", flush=True)
+        device_map = {"": 0}
+    else:
+        device_map = None
 
     if load_in_4bit and has_bnb and torch.cuda.is_available():
         try:
@@ -40,13 +50,10 @@ def load_model_and_tokenizer(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
             )
-            device_map = "auto"
         except Exception:
             bnb_config = None
-            device_map = "auto" if torch.cuda.is_available() else None
     else:
         bnb_config = None
-        device_map = "auto" if torch.cuda.is_available() else None
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -55,7 +62,6 @@ def load_model_and_tokenizer(
         device_map=device_map,
         trust_remote_code=True,
     )
-
 
     if attach_lora:
         try:
