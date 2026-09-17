@@ -38,6 +38,10 @@ def load_sft_adapter(path,device_map):
 def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/ppo",num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.02,target_kl=6.0,max_steps=10):
     tokenizer.padding_side="left"
     if tokenizer.pad_token is None: tokenizer.pad_token=tokenizer.eos_token
+    # Filter dataset to ensure every sample has non-empty executable benchmark tests
+    dataset=dataset.filter(lambda ex: len(normalize_tests(ex)) > 0)
+    if len(dataset)==0: raise ValueError("No dataset examples contain valid executable benchmark tests")
+    all_benchmark_tests=[normalize_tests(ex) for ex in dataset]
     def encode(ex):
         p=ex.get("question",ex.get("prompt",""))
         t=tokenizer("### Problem:\n%s\n\n### Solution:\n```python\n"%p,truncation=True,max_length=256)
@@ -64,7 +68,12 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         queries=[q.squeeze() if isinstance(q,torch.Tensor) and q.dim()>1 else torch.as_tensor(q,dtype=torch.long) for q in batch["input_ids"]]
         with torch.no_grad(): responses=trainer.generate(queries,**kwargs)
         rewards=[]
-        for response,tests in zip(responses,batch["benchmark_tests"]):
+        batch_tests = batch.get("benchmark_tests")
+        if batch_tests is None:
+            start_i = (step - 1) * batch_size
+            end_i = start_i + len(queries)
+            batch_tests = all_benchmark_tests[start_i:end_i]
+        for response,tests in zip(responses,batch_tests):
             if not tests: raise ValueError("No executable benchmark tests; refusing process-only reward")
             code=tokenizer.decode(response,skip_special_tokens=True)
             if all(isinstance(t,str) for t in tests):
