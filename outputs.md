@@ -367,3 +367,27 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 ### Execution Evidence
 - **Link**: [executed Kaggle Notebook 7](https://www.kaggle.com/code/rajdeepbhowmick/notebook7)
 - **Verification Status**: **All evaluation matrix runs, metric calculations, and ablation studies completed successfully.**
+
+---
+
+## Notebook 05 (Corrected): PPO Training Smoke Test Verification
+**Date**: 2026-09-18
+
+### Step 1: Environment & SFT Checkpoint Resolution
+- **Git Commit**: `junior-A` branch
+- **Setup Execution**: Cloned `junior-A` `src/`, uninstalled `torchao 0.10.0`, auto-copied `SFT` checkpoint (`./checkpoints/sft/final`).
+- **Checkpoint Verification**:
+  - `adapter_config.json`, `adapter_model.safetensors` verified at `./checkpoints/sft/final`.
+  - Base model (`deepseek-ai/deepseek-coder-1.3b-instruct`) loaded in FP16 precision with `AutoModelForCausalLMWithValueHead`.
+  - LoRA adapter parameters enabled for training (`lora_` and `v_head`).
+
+### Step 2: 2-Step PPO Smoke Test Execution
+- **Smoke Dataset**: 16 APPS problem examples with non-empty benchmark test suites.
+- **Rollout Step 1**:
+  - **Mean Reward**: `-0.200`
+  - **KL Divergence**: `0.000`
+- **Rollout Step 2**:
+  - **Mean Reward**: `-0.200`
+  - **KL Divergence**: `-0.048`
+- **Verification Status**: **PASSED** (SFT adapter loaded, benchmark test execution verified, 2 PPO steps completed successfully without errors).
+

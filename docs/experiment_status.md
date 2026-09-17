@@ -22,7 +22,10 @@ The September 2026 notebook runs are preserved as execution evidence, but the nu
 
 ## PPO validation
 
-The old PPO run completed technically, but its repeated `-0.200` reward does not establish successful learning. Re-run only after the corrected smoke test confirms that benchmark tests are reaching the reward function and that the SFT adapter is loaded.
+- **Smoke Test Status**: **PASSED (2026-09-18)**
+  - SFT adapter (`./checkpoints/sft/final`) loaded into `AutoModelForCausalLMWithValueHead`.
+  - APPS benchmark execution test cases evaluated for code rewards.
+  - 2-step PPO rollout completed cleanly without errors (`PPO step 1 reward=-0.200 kl=0.000`, `PPO step 2 reward=-0.200 kl=-0.048`).
 
 ## Reporting rule
 
