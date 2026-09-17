@@ -30,13 +30,14 @@ def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = Non
 
 
 def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, K: int = 3, initial_code: str = None) -> list:
-    """Run up to K turns; each retry receives the real execution feedback."""
+    """Run up to K turns; every retry receives real execution feedback."""
     history, code, error = [], initial_code, ""
     device = next(model.parameters()).device
-    tests = test_cases or []
-    sandbox = PythonSandbox()
+    tests, sandbox = test_cases or [], PythonSandbox()
     for turn in range(K):
-        if not (turn == 0 and code is not None):
+        if turn == 0 and code is not None:
+            prompt = build_prompt(problem)
+        else:
             prompt = build_prompt(problem, code, error)
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
             with torch.no_grad():
@@ -45,8 +46,6 @@ def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, 
                     pad_token_id=tokenizer.pad_token_id)
             full = tokenizer.decode(output[0], skip_special_tokens=True)
             code = extract_code_block(full, prompt)
-        else:
-            prompt = build_prompt(problem)
         result = _execute(code, tests, sandbox)
         history.append({"turn": turn + 1, "prompt": prompt, "code": code, "result": result.to_dict()})
         if result.status == ExecutionStatus.AC:
@@ -56,14 +55,13 @@ def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, 
 
 
 def agentic_loop_no_feedback(model, tokenizer, problem: str, test_cases: list = None, K: int = 3) -> list:
-    """RQ2 control: use random fake error text, while still evaluating on real tests."""
+    """RQ2 control: random fake error context, but correctness is checked on real tests."""
     history, code = [], None
     fake_errors = ['NameError: name "x" is not defined', "IndexError: list index out of range", "TypeError: unsupported operand type(s)"]
     device = next(model.parameters()).device
     tests, sandbox = test_cases or [], PythonSandbox()
     for turn in range(K):
-        fake_tb = random.choice(fake_errors)
-        prompt = build_prompt(problem, code, fake_tb)
+        prompt = build_prompt(problem, code, random.choice(fake_errors))
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         with torch.no_grad():
             output = model.generate(**inputs, max_new_tokens=512,
@@ -90,6 +88,7 @@ def format_execution_feedback(result: ExecutionResult) -> str:
 
 
 class DebugLoop:
+    """Controls multi-turn debugging sessions."""
     def __init__(self, sandbox: Optional[PythonSandbox] = None, max_turns: int = 5, traceback_token_cap: int = 500):
         self.sandbox, self.max_turns, self.traceback_token_cap = sandbox or PythonSandbox(), max_turns, traceback_token_cap
 
@@ -102,19 +101,25 @@ class DebugLoop:
                 "Identify the bug, correct the code, and provide the fixed Python solution wrapped in ```python ... ```." )
 
     def run_session(self, problem_description: str, test_cases: List[Dict[str, Any]], model_fn: Callable[[str], str], initial_code: Optional[str] = None) -> Dict[str, Any]:
-        history, current_code = [], initial_code
+        history, current_code, last_exec = [], initial_code, None
         solved, solved_turn = False, None
         for turn_idx in range(1, self.max_turns + 1):
             if current_code is None:
                 prompt = self.build_initial_prompt(problem_description)
                 current_code = extract_code_block(model_fn(prompt))
             else:
-                prompt = self.build_turn_prompt(problem_description, current_code, history[-1]["execution_result"] if history else self.sandbox.run_tests(current_code, test_cases))
+                prompt = self.build_turn_prompt(problem_description, current_code, last_exec)
             exec_res = self.sandbox.run_tests(current_code, test_cases)
-            history.append({"turn": turn_idx, "prompt": prompt, "code": current_code, "execution_result": exec_res.to_dict(), "reward": compute_partial_reward(exec_res), "status": exec_res.status})
+            last_exec = exec_res
+            history.append({"turn": turn_idx, "prompt": prompt, "code": current_code,
+                            "execution_result": exec_res.to_dict(), "reward": compute_partial_reward(exec_res),
+                            "status": exec_res.status})
             if exec_res.status == ExecutionStatus.AC:
                 solved, solved_turn = True, turn_idx
                 break
             if turn_idx < self.max_turns:
                 current_code = extract_code_block(model_fn(self.build_turn_prompt(problem_description, current_code, exec_res)))
-        return {"solved": solved, "solved_turn": solved_turn, "total_turns": len(history), "max_turns": self.max_turns, "history": history, "final_status": history[-1]["status"] if history else "CE", "final_reward": history[-1]["reward"] if history else -0.2}
+        return {"solved": solved, "solved_turn": solved_turn, "total_turns": len(history),
+                "max_turns": self.max_turns, "history": history,
+                "final_status": history[-1]["status"] if history else "CE",
+                "final_reward": history[-1]["reward"] if history else -0.2}
