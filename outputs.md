@@ -391,3 +391,30 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - **KL Divergence**: `-0.048`
 - **Verification Status**: **PASSED** (SFT adapter loaded, benchmark test execution verified, 2 PPO steps completed successfully without errors).
 
+---
+
+## Notebook 07 (Corrected): Evaluation & Ablations Smoke Test
+**Date**: 2026-09-18
+
+### Step 1: Environment & Dataset Initialization
+- **Git Branch**: `junior-A`
+- **Workarounds**: `torchao-0.10.0` uninstalled successfully.
+- **Benchmarks**: 164 HumanEval test cases / 500 MBPP test cases.
+
+### Step 2: Evaluation Matrix ($N=20$ per benchmark, $K \in \{1, 3, 5\}$)
+
+| Model | K | N_HE | N_MBPP | HE_Pass@1 | HE_Fix@K | MBPP_Pass@1 | MBPP_Fix@K | Status |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Zero-Shot** | 1 | 20 | 20 | 0.40 | 0.40 | 0.10 | 0.10 | Completed |
+| **Zero-Shot** | 3 | 20 | 20 | 0.40 | 0.95 | 0.10 | 0.20 | Completed |
+| **Zero-Shot** | 5 | 20 | 20 | 0.40 | 1.00 | 0.10 | 0.20 | Completed |
+| **SFT** | 1,3,5 | - | - | - | - | - | - | SKIPPED (Checkpoint missing) |
+| **PPO** | 1,3,5 | - | - | - | - | - | - | SKIPPED (Checkpoint missing) |
+| **DPO** | 1,3,5 | - | - | - | - | - | - | SKIPPED (Checkpoint missing) |
+
+### Verification Check
+- **No Silent Fallback**: Confirmed missing checkpoints are explicitly reported as `SKIPPED` rather than silently replacing with base model.
+- **Output Artifact**: Generated `evaluation_results_corrected.csv`.
+- **Verification Status**: **PASSED**
+
+
