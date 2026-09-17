@@ -2,9 +2,10 @@
 
 import ast
 import os
-import sys
 import subprocess
+import sys
 import tempfile
+import time
 import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -18,22 +19,16 @@ except ImportError:
 
 
 def run_code(code: str, timeout: int = 3) -> dict:
-    """Safely run Python code and return status + output.
+    """Run a Python program and classify process-level failures.
 
-    Status codes:
-    - AC: All Correct (exit code 0)
-    - WA: Wrong Answer (handled when comparing expected output)
-    - TLE: Time Limit Exceeded
-    - MLE: Memory Limit Exceeded
-    - CE: Compilation / Syntax Error
-    - RE: Runtime Error (crash / exception)
+    This function is intentionally process-level only. Benchmark correctness must
+    use ``PythonSandbox.run_tests`` with explicit test cases.
     """
-    python_cmd = sys.executable if sys.executable else ("python3" if os.name != "nt" else "python")
+    python_cmd = sys.executable or ("python3" if os.name != "nt" else "python")
 
     def preexec_limit():
         if resource is not None and os.name != "nt":
             try:
-                # 1 GB memory limit
                 resource.setrlimit(resource.RLIMIT_AS, (1_000_000_000, 1_000_000_000))
             except Exception:
                 pass
@@ -46,17 +41,16 @@ def run_code(code: str, timeout: int = 3) -> dict:
             timeout=timeout,
             preexec_fn=preexec_limit if (resource is not None and os.name != "nt") else None,
         )
-
         if result.returncode == 0:
             return {"status": "AC", "output": result.stdout, "traceback": ""}
+        tb = result.stderr
+        if "SyntaxError" in tb or "IndentationError" in tb:
+            status = "CE"
+        elif "MemoryError" in tb:
+            status = "MLE"
         else:
-            tb = result.stderr
-            if "SyntaxError" in tb or "IndentationError" in tb:
-                return {"status": "CE", "output": "", "traceback": tb}
-            elif "MemoryError" in tb:
-                return {"status": "MLE", "output": "", "traceback": "Memory limit exceeded"}
-            else:
-                return {"status": "RE", "output": "", "traceback": tb}
+            status = "RE"
+        return {"status": status, "output": result.stdout, "traceback": tb}
     except subprocess.TimeoutExpired:
         return {"status": "TLE", "output": "", "traceback": "Execution timed out"}
     except MemoryError:
@@ -67,7 +61,7 @@ def run_code(code: str, timeout: int = 3) -> dict:
 
 @dataclass
 class ExecutionResult:
-    status: str  # AC, WA, TLE, MLE, CE, RE, PE
+    status: str
     passed_tests: int = 0
     total_tests: int = 0
     stdout: str = ""
@@ -79,7 +73,7 @@ class ExecutionResult:
     @property
     def pass_rate(self) -> float:
         if self.total_tests == 0:
-            return 1.0 if self.status == ExecutionStatus.AC else 0.0
+            return 0.0
         return self.passed_tests / self.total_tests
 
     def to_dict(self) -> Dict[str, Any]:
@@ -97,120 +91,75 @@ class ExecutionResult:
 
 
 class PythonSandbox:
-    """Safe execution sandbox for Python code snippets against test suites."""
+    """Execute Python code against explicit assertion or I/O test cases."""
 
     def __init__(self, default_timeout: float = 5.0, max_memory_mb: float = 1024.0):
         self.default_timeout = default_timeout
         self.max_memory_mb = max_memory_mb
 
     def check_syntax(self, code: str) -> Optional[ExecutionResult]:
-        """Validates python code syntax before execution."""
         try:
             ast.parse(code)
             return None
         except SyntaxError as e:
-            tb_str = f"SyntaxError: {e.msg} at line {e.lineno}, column {e.offset}\n{e.text or ''}"
             return ExecutionResult(
                 status=ExecutionStatus.CE,
-                passed_tests=0,
-                total_tests=0,
                 stderr=str(e),
-                traceback=tb_str,
+                traceback=f"SyntaxError: {e.msg} at line {e.lineno}, column {e.offset}\n{e.text or ''}",
             )
         except Exception as e:
-            return ExecutionResult(
-                status=ExecutionStatus.CE,
-                passed_tests=0,
-                total_tests=0,
-                stderr=str(e),
-                traceback=traceback.format_exc(),
-            )
+            return ExecutionResult(status=ExecutionStatus.CE, stderr=str(e), traceback=traceback.format_exc())
 
-    def run_single(
-        self,
-        code: str,
-        test_case: Optional[Dict[str, Any]] = None,
-        timeout: Optional[float] = None,
-    ) -> ExecutionResult:
-        """Runs python code in an isolated subprocess with timeout."""
+    def run_single(self, code: str, test_case: Optional[Dict[str, Any]] = None, timeout: Optional[float] = None) -> ExecutionResult:
         timeout = timeout or self.default_timeout
-
         syntax_err = self.check_syntax(code)
         if syntax_err:
+            syntax_err.total_tests = 1
             return syntax_err
 
-        # Prepare harness runner script
         harness_code = self._build_runner_script(code, test_case)
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False, encoding="utf-8"
-        ) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as tmp_file:
             tmp_file.write(harness_code)
             tmp_path = tmp_file.name
 
+        start = time.time()
         try:
+            def preexec_limit():
+                if resource is not None and os.name != "nt":
+                    try:
+                        limit = int(self.max_memory_mb * 1024 * 1024)
+                        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+                    except Exception:
+                        pass
+
             proc = subprocess.run(
                 [sys.executable, tmp_path],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                preexec_fn=preexec_limit if (resource is not None and os.name != "nt") else None,
             )
+            elapsed = time.time() - start
+            stdout, stderr = proc.stdout, proc.stderr
 
-            stdout = proc.stdout
-            stderr = proc.stderr
-
+            if proc.returncode == 0 and "PASSED_TEST_MARKER" in (stdout + stderr):
+                return ExecutionResult("AC", 1, 1, stdout.replace("PASSED_TEST_MARKER", "").strip(), stderr, execution_time=elapsed)
             if proc.returncode == 0:
-                if "PASSED_TEST_MARKER" in stdout:
-                    return ExecutionResult(
-                        status=ExecutionStatus.AC,
-                        passed_tests=1,
-                        total_tests=1,
-                        stdout=stdout.replace("PASSED_TEST_MARKER", "").strip(),
-                        stderr=stderr,
-                    )
-                else:
-                    return ExecutionResult(
-                        status=ExecutionStatus.AC,
-                        passed_tests=1,
-                        total_tests=1,
-                        stdout=stdout.strip(),
-                        stderr=stderr,
-                    )
-            elif proc.returncode == 2:  # Assertion / Wrong Answer error code
-                return ExecutionResult(
-                    status=ExecutionStatus.WA,
-                    passed_tests=0,
-                    total_tests=1,
-                    stdout=stdout,
-                    stderr=stderr,
-                    traceback=stderr.strip(),
-                )
+                # No explicit test marker means the harness did not verify correctness.
+                return ExecutionResult("WA", 0, 1, stdout, stderr, "No test assertion/output check was executed.", execution_time=elapsed)
+            if proc.returncode == 2:
+                return ExecutionResult("WA", 0, 1, stdout, stderr, stderr.strip(), execution_time=elapsed)
+            if "MemoryError" in stderr:
+                status = "MLE"
+            elif "SyntaxError" in stderr or "IndentationError" in stderr:
+                status = "CE"
             else:
-                return ExecutionResult(
-                    status=ExecutionStatus.RE,
-                    passed_tests=0,
-                    total_tests=1,
-                    stdout=stdout,
-                    stderr=stderr,
-                    traceback=stderr.strip(),
-                )
-
+                status = "RE"
+            return ExecutionResult(status, 0, 1, stdout, stderr, stderr.strip(), execution_time=elapsed)
         except subprocess.TimeoutExpired:
-            return ExecutionResult(
-                status=ExecutionStatus.TLE,
-                passed_tests=0,
-                total_tests=1,
-                stderr=f"Execution timed out after {timeout} seconds.",
-                traceback=f"TimeoutError: Code execution exceeded time limit of {timeout}s.",
-            )
+            return ExecutionResult("TLE", 0, 1, stderr=f"Execution timed out after {timeout} seconds.", traceback=f"TimeoutError: Code execution exceeded {timeout}s.")
         except Exception as e:
-            return ExecutionResult(
-                status=ExecutionStatus.RE,
-                passed_tests=0,
-                total_tests=1,
-                stderr=str(e),
-                traceback=traceback.format_exc(),
-            )
+            return ExecutionResult("RE", 0, 1, stderr=str(e), traceback=traceback.format_exc())
         finally:
             if os.path.exists(tmp_path):
                 try:
@@ -218,141 +167,120 @@ class PythonSandbox:
                 except OSError:
                     pass
 
-    def run_tests(
-        self,
-        code: str,
-        test_cases: List[Dict[str, Any]],
-        timeout_per_test: Optional[float] = None,
-    ) -> ExecutionResult:
-        """Runs python code against a suite of test cases."""
+    def run_tests(self, code: str, test_cases: List[Dict[str, Any]], timeout_per_test: Optional[float] = None) -> ExecutionResult:
+        """Run code against every supplied test case; never treat an empty suite as AC."""
+        if not test_cases:
+            return ExecutionResult("CE", 0, 0, traceback="No executable test cases supplied.")
+
         syntax_err = self.check_syntax(code)
         if syntax_err:
             syntax_err.total_tests = len(test_cases)
             return syntax_err
 
-        if not test_cases:
-            res = self.run_single(code, timeout=timeout_per_test)
-            res.total_tests = 1
-            return res
-
         passed = 0
-        total = len(test_cases)
         details = []
+        first_error = ""
         overall_status = ExecutionStatus.AC
-        first_traceback = ""
-        combined_stdout = []
-        combined_stderr = []
+        total = len(test_cases)
+        start = time.time()
 
         for i, test in enumerate(test_cases):
+            if isinstance(test, str):
+                test = {"assertion": test}
             res = self.run_single(code, test_case=test, timeout=timeout_per_test)
-            test_detail = {
+            details.append({
                 "test_index": i,
                 "status": res.status,
                 "passed": res.status == ExecutionStatus.AC,
                 "stdout": res.stdout,
                 "stderr": res.stderr,
                 "traceback": res.traceback,
-            }
-            details.append(test_detail)
-
-            if res.stdout:
-                combined_stdout.append(f"[Test {i+1}] {res.stdout}")
-            if res.stderr:
-                combined_stderr.append(f"[Test {i+1}] {res.stderr}")
-
+            })
             if res.status == ExecutionStatus.AC:
                 passed += 1
-            else:
-                if not first_traceback:
-                    first_traceback = res.traceback
-                # Pick highest severity error for overall status
-                if res.status in (ExecutionStatus.TLE, ExecutionStatus.MLE):
-                    overall_status = ExecutionStatus.TLE
-                elif res.status == ExecutionStatus.RE and overall_status != ExecutionStatus.TLE:
-                    overall_status = ExecutionStatus.RE
-                elif res.status == ExecutionStatus.WA and overall_status not in (ExecutionStatus.TLE, ExecutionStatus.RE):
-                    overall_status = ExecutionStatus.WA
+            elif not first_error:
+                first_error = res.traceback or res.stderr
+            if res.status == ExecutionStatus.TLE:
+                overall_status = ExecutionStatus.TLE
+            elif res.status == ExecutionStatus.MLE and overall_status != ExecutionStatus.TLE:
+                overall_status = ExecutionStatus.MLE
+            elif res.status == ExecutionStatus.RE and overall_status not in (ExecutionStatus.TLE, ExecutionStatus.MLE):
+                overall_status = ExecutionStatus.RE
+            elif res.status in (ExecutionStatus.CE, ExecutionStatus.WA) and overall_status not in (ExecutionStatus.TLE, ExecutionStatus.MLE, ExecutionStatus.RE):
+                overall_status = res.status
 
+        if passed == total:
+            overall_status = ExecutionStatus.AC
         return ExecutionResult(
-            status=ExecutionStatus.AC if passed == total else overall_status,
+            status=overall_status,
             passed_tests=passed,
             total_tests=total,
-            stdout="\n".join(combined_stdout),
-            stderr="\n".join(combined_stderr),
-            traceback=first_traceback,
+            traceback=first_error,
+            execution_time=time.time() - start,
             details=details,
         )
 
     def _build_runner_script(self, code: str, test_case: Optional[Dict[str, Any]]) -> str:
-        """Constructs executable python script containing solution and test runner logic."""
-        script = f"{code}\n\n"
+        """Build a harness that executes the solution only after test I/O is installed."""
+        test_case = test_case or {}
 
-        if not test_case:
-            script += "print('PASSED_TEST_MARKER')\n"
-            return script
-
-        # Assertion case
-        if "assertion" in test_case:
-            script += "try:\n"
-            script += f"    {test_case['assertion']}\n"
-            script += "    print('PASSED_TEST_MARKER')\n"
-            script += "except AssertionError as e:\n"
-            script += "    import sys, traceback\n"
-            script += "    traceback.print_exc()\n"
-            script += "    sys.exit(2)\n"
-
-        # Input/Output standard I/O test case
-        elif "input" in test_case and "output" in test_case and isinstance(test_case["input"], str):
+        if "input" in test_case and "output" in test_case and isinstance(test_case["input"], str):
             inp = repr(test_case["input"])
-            expected = repr(test_case["output"].strip())
-            script += "import io, sys, traceback\n"
-            script += f"sys.stdin = io.StringIO({inp})\n"
-            script += "out_buf = io.StringIO()\n"
-            script += "sys.stdout = out_buf\n"
-            script += "try:\n"
-            script += f"    exec({repr(code)})\n"
-            script += "    actual = out_buf.getvalue().strip()\n"
-            script += f"    if actual == {expected}:\n"
-            script += "        sys.stderr.write('PASSED_TEST_MARKER\\n')\n"
-            script += "    else:\n"
-            script += "        sys.stderr.write(f'AssertionError: Expected {expected}, got {actual}\\n')\n"
-            script += "        sys.exit(2)\n"
-            script += "except SystemExit as e:\n"
-            script += "    sys.exit(e.code)\n"
-            script += "except Exception as e:\n"
-            script += "    traceback.print_exc()\n"
-            script += "    sys.exit(1)\n"
+            expected = repr(str(test_case["output"]).strip())
+            return (
+                "import io, sys, traceback\n"
+                f"_solution = {code!r}\n"
+                f"sys.stdin = io.StringIO({inp})\n"
+                "out_buf = io.StringIO()\n"
+                "sys.stdout = out_buf\n"
+                "try:\n"
+                "    exec(_solution, globals())\n"
+                "    actual = out_buf.getvalue().strip()\n"
+                f"    expected = {expected}\n"
+                "    if actual == expected:\n"
+                "        sys.stderr.write('PASSED_TEST_MARKER\\n')\n"
+                "    else:\n"
+                "        sys.stderr.write(f'AssertionError: Expected {expected!r}, got {actual!r}\\n')\n"
+                "        sys.exit(2)\n"
+                "except SystemExit as e:\n"
+                "    sys.exit(e.code)\n"
+                "except Exception:\n"
+                "    traceback.print_exc(file=sys.stderr)\n"
+                "    sys.exit(1)\n"
+            )
 
-
-        # Function call case: fn_name, input, expected
+        script = f"{code}\n\n"
+        if "assertion" in test_case:
+            script += (
+                "try:\n"
+                f"    {test_case['assertion']}\n"
+                "    print('PASSED_TEST_MARKER')\n"
+                "except AssertionError:\n"
+                "    traceback.print_exc()\n"
+                "    sys.exit(2)\n"
+            )
         elif "fn_name" in test_case and "input" in test_case and "expected" in test_case:
             fn_name = test_case["fn_name"]
             inputs = test_case["input"]
             expected = repr(test_case["expected"])
-
             if isinstance(inputs, list):
-                args_str = ", ".join(repr(arg) for arg in inputs)
+                args_str = ", ".join(repr(x) for x in inputs)
             elif isinstance(inputs, dict):
                 args_str = ", ".join(f"{k}={repr(v)}" for k, v in inputs.items())
             else:
                 args_str = repr(inputs)
-
-            script += "import sys, traceback\n"
-            script += "try:\n"
-            script += f"    actual = {fn_name}({args_str})\n"
-            script += f"    if actual == {expected}:\n"
-            script += "        print('PASSED_TEST_MARKER')\n"
-            script += "    else:\n"
-            script += f"        sys.stderr.write('AssertionError: Expected ' + repr({expected}) + ', got ' + repr(actual) + '\\n')\n"
-            script += "        sys.exit(2)\n"
-            script += "except SystemExit as e:\n"
-            script += "    sys.exit(e.code)\n"
-            script += "except Exception as e:\n"
-            script += "    traceback.print_exc()\n"
-            script += "    sys.exit(1)\n"
+            script += (
+                "import sys, traceback\ntry:\n"
+                f"    actual = {fn_name}({args_str})\n"
+                f"    expected = {expected}\n"
+                "    if actual == expected:\n"
+                "        print('PASSED_TEST_MARKER')\n"
+                "    else:\n"
+                "        print(f'AssertionError: Expected {expected!r}, got {actual!r}', file=sys.stderr)\n"
+                "        sys.exit(2)\n"
+                "except SystemExit as e:\n    sys.exit(e.code)\n"
+                "except Exception:\n    traceback.print_exc(); sys.exit(1)\n"
+            )
         else:
-            script += "print('PASSED_TEST_MARKER')\n"
-
+            script += "import sys\nsys.exit(2)\n"
         return script
-
-
