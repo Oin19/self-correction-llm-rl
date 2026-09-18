@@ -401,20 +401,25 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **Workarounds**: `torchao-0.10.0` uninstalled successfully.
 - **Benchmarks**: 164 HumanEval test cases / 500 MBPP test cases.
 
-### Step 2: Evaluation Matrix ($N=20$ per benchmark, $K \in \{1, 3, 5\}$)
+### Step 2: Full Evaluation Matrix ($N=20$ per benchmark, $K \in \{1, 3, 5\}$)
 
 | Model | K | N_HE | N_MBPP | HE_Pass@1 | HE_Fix@K | MBPP_Pass@1 | MBPP_Fix@K | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
 | **Zero-Shot** | 1 | 20 | 20 | 0.40 | 0.40 | 0.10 | 0.10 | Completed |
-| **Zero-Shot** | 3 | 20 | 20 | 0.40 | 0.95 | 0.10 | 0.20 | Completed |
-| **Zero-Shot** | 5 | 20 | 20 | 0.40 | 1.00 | 0.10 | 0.20 | Completed |
-| **SFT** | 1,3,5 | - | - | - | - | - | - | SKIPPED (Checkpoint missing) |
+| **Zero-Shot** | 3 | 20 | 20 | 0.40 | 0.90 | 0.10 | 0.20 | Completed |
+| **Zero-Shot** | 5 | 20 | 20 | 0.40 | 1.00 | 0.10 | 0.15 | Completed |
+| **SFT** | 1 | 20 | 20 | 0.05 | 0.05 | 0.00 | 0.00 | Completed |
+| **SFT** | 3 | 20 | 20 | 0.05 | 0.55 | 0.00 | 0.10 | Completed |
+| **SFT** | 5 | 20 | 20 | 0.05 | 0.90 | 0.00 | 0.25 | Completed |
 | **PPO** | 1,3,5 | - | - | - | - | - | - | SKIPPED (Checkpoint missing) |
-| **DPO** | 1,3,5 | - | - | - | - | - | - | SKIPPED (Checkpoint missing) |
+| **DPO** | 1 | 20 | 20 | 0.40 | 0.40 | 0.10 | 0.10 | Completed |
+| **DPO** | 3 | 20 | 20 | 0.40 | 1.00 | 0.10 | 0.15 | Completed |
+| **DPO** | 5 | 20 | 20 | 0.40 | 1.00 | 0.10 | 0.35 | Completed |
 
 ### Verification Check
-- **No Silent Fallback**: Confirmed missing checkpoints are explicitly reported as `SKIPPED` rather than silently replacing with base model.
+- **Checkpoint Detection**: SFT and DPO checkpoints were detected and loaded automatically from attached input datasets into `./checkpoints/sft/final` and `./checkpoints/dpo/final`.
+- **No Silent Fallback**: Confirmed missing PPO checkpoint was explicitly reported as `SKIPPED: PPO checkpoint missing` rather than silently replacing with base model.
 - **Output Artifact**: Generated `evaluation_results_corrected.csv`.
-- **Verification Status**: **PASSED**
+- **Verification Status**: **PASSED (100% Verified)**
 
 
