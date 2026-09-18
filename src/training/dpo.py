@@ -34,27 +34,14 @@ def parse_apps_test_cases(prob: dict) -> list:
 
     test_code_snippets = []
     if fn_name:
-        for inp, outp in zip(inputs[:2], outputs[:2]):
+        for inp, outp in zip(inputs, outputs):
             test_code_snippets.append(f"assert {fn_name}(*{repr(inp)}) == {repr(outp)}")
     else:
-        for inp, outp in zip(inputs[:2], outputs[:2]):
+        for inp, outp in zip(inputs, outputs):
             inp_str = "\n".join(inp) if isinstance(inp, list) else str(inp)
             outp_str = "\n".join(outp) if isinstance(outp, list) else str(outp)
-            snippet = (
-                f"import sys, io\n"
-                f"_saved_stdin = sys.stdin\n"
-                f"_saved_stdout = sys.stdout\n"
-                f"sys.stdin = io.StringIO({repr(inp_str)})\n"
-                f"sys.stdout = io.StringIO()\n"
-                f"try:\n"
-                f"    pass\n"
-                f"finally:\n"
-                f"    _out = sys.stdout.getvalue().strip()\n"
-                f"    sys.stdin = _saved_stdin\n"
-                f"    sys.stdout = _saved_stdout\n"
-                f"assert _out == {repr(outp_str.strip())}, f'Expected {repr(outp_str.strip())}, got {{repr(_out)}}'"
-            )
-            test_code_snippets.append(snippet)
+            test_code_snippets.append({"input": inp_str, "output": outp_str})
+
 
     return test_code_snippets
 
