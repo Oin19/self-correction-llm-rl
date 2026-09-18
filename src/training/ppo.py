@@ -2,7 +2,7 @@
 import gc, json, os
 import torch
 from peft import PeftModel
-from src.execution.executor import PythonSandbox, run_code
+from src.execution.executor import PythonSandbox
 from src.rewards.execution_reward import compute_partial_reward
 from trl import PPOTrainer, PPOConfig
 from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
@@ -52,7 +52,12 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     ng=torch.cuda.device_count() if torch.cuda.is_available() else 0
     device_map="auto" if ng>=2 else ({"":0} if ng==1 else None)
     model,base=load_sft_adapter(sft_model_path,device_map)
-    if hasattr(model.pretrained_model,"gradient_checkpointing_enable"): model.pretrained_model.gradient_checkpointing_enable()
+    if hasattr(model.pretrained_model, "gradient_checkpointing_enable"):
+        model.pretrained_model.gradient_checkpointing_enable()
+    if hasattr(model.pretrained_model, "config"):
+        model.pretrained_model.config.use_cache = False
+    if hasattr(model.pretrained_model, "enable_input_require_grads"):
+        model.pretrained_model.enable_input_require_grads()
     for p in model.pretrained_model.parameters(): p.requires_grad=False
     for n,p in model.named_parameters():
         if "lora_" in n or "v_head" in n or "summary" in n: p.requires_grad=True
@@ -76,14 +81,18 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         for response,tests in zip(responses,batch_tests):
             if not tests: raise ValueError("No executable benchmark tests; refusing process-only reward")
             code=tokenizer.decode(response,skip_special_tokens=True)
-            if all(isinstance(t,str) for t in tests):
-                raw=run_code(code+"\n\n"+"\n\n".join(tests),timeout=5)
-                result={"status":raw["status"],"passed_tests":int(raw["status"]=="AC"),"total_tests":1}
-            else: result=sandbox.run_tests(code,tests).to_dict()
-            rewards.append(torch.tensor(compute_partial_reward(result),dtype=torch.float32))
+            # Always use the benchmark harness for explicit tests.\n            result = sandbox.run_tests(code, tests).to_dict()\n            rewards.append(torch.tensor(compute_partial_reward(result),dtype=torch.float32))
         stats=trainer.step(queries,responses,rewards)
         print("PPO step %d reward=%.3f kl=%.3f"%(step,stats.get("ppo/mean_scores",0.0),stats.get("objective/kl",0.0)),flush=True)
         if max_steps and step>=max_steps: break
-    os.makedirs(os.path.join(output_dir,"final"),exist_ok=True)
-    model.save_pretrained(os.path.join(output_dir,"final")); tokenizer.save_pretrained(os.path.join(output_dir,"final"))
+    final_dir = os.path.join(output_dir, "final")
+    os.makedirs(final_dir, exist_ok=True)
+    policy = getattr(model, "pretrained_model", model)
+    if hasattr(policy, "save_pretrained"):
+        policy.save_pretrained(final_dir)
+    else:
+        model.save_pretrained(final_dir)
+    tokenizer.save_pretrained(final_dir)
+    with open(os.path.join(final_dir, "ppo_metadata.json"), "w", encoding="utf-8") as f:
+        json.dump({"base_model": base, "checkpoint_type": "ppo_policy_adapter"}, f, indent=2)
     return trainer
