@@ -138,7 +138,14 @@ def run_dpo_training(
             )
 
     dpo_trainer.train()
-    dpo_trainer.save_model(f"{output_dir}/final")
+    final_dir = f"{output_dir}/final"
+    dpo_trainer.save_model(final_dir)
     if hasattr(tokenizer, "save_pretrained"):
-        tokenizer.save_pretrained(f"{output_dir}/final")
+        tokenizer.save_pretrained(final_dir)
+    with open(f"{final_dir}/dpo_metadata.json", "w", encoding="utf-8") as f:
+        json.dump({
+            "checkpoint_type": "dpo_execution_grounded",
+            "preference_source": "model_generated_execution_rollouts",
+            "reference_solution_fallback": False,
+        }, f, indent=2)
     return dpo_trainer
