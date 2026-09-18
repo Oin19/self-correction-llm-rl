@@ -40,10 +40,15 @@ def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, 
         else:
             prompt = build_prompt(problem, code, error)
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
+            gen_kwargs = {
+                "max_new_tokens": 512,
+                "do_sample": turn > 0,
+                "pad_token_id": tokenizer.pad_token_id,
+            }
+            if turn > 0:
+                gen_kwargs.update({"temperature": 1.0, "top_p": 0.95})
             with torch.no_grad():
-                output = model.generate(**inputs, max_new_tokens=512,
-                    temperature=0.2 if turn == 0 else 1.0, do_sample=(turn > 0), top_p=0.95,
-                    pad_token_id=tokenizer.pad_token_id)
+                output = model.generate(**inputs, **gen_kwargs)
             full = tokenizer.decode(output[0], skip_special_tokens=True)
             code = extract_code_block(full, prompt)
         result = _execute(code, tests, sandbox)
@@ -63,10 +68,15 @@ def agentic_loop_no_feedback(model, tokenizer, problem: str, test_cases: list = 
     for turn in range(K):
         prompt = build_prompt(problem, code, random.choice(fake_errors))
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
+        gen_kwargs = {
+            "max_new_tokens": 512,
+            "do_sample": turn > 0,
+            "pad_token_id": tokenizer.pad_token_id,
+        }
+        if turn > 0:
+            gen_kwargs.update({"temperature": 1.0, "top_p": 0.95})
         with torch.no_grad():
-            output = model.generate(**inputs, max_new_tokens=512,
-                temperature=0.2 if turn == 0 else 1.0, do_sample=(turn > 0), top_p=0.95,
-                pad_token_id=tokenizer.pad_token_id)
+            output = model.generate(**inputs, **gen_kwargs)
         full = tokenizer.decode(output[0], skip_special_tokens=True)
         code = extract_code_block(full, prompt)
         result = _execute(code, tests, sandbox)
