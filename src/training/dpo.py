@@ -79,22 +79,8 @@ def make_preference_pairs(problems, model, tokenizer, K: int = 3) -> Dataset:
                 "chosen": ac_turns[0]["code"],
                 "rejected": bad_turns[0]["code"],
             })
-        else:
-            solutions = prob.get("solutions", [])
-            if isinstance(solutions, str):
-                try:
-                    solutions = json.loads(solutions)
-                except Exception:
-                    solutions = [solutions]
-            if solutions and history:
-                chosen_code = solutions[0] if isinstance(solutions, list) else str(solutions)
-                rejected_code = history[0]["code"]
-                if chosen_code and rejected_code and chosen_code != rejected_code:
-                    pairs.append({
-                        "prompt": question,
-                        "chosen": chosen_code,
-                        "rejected": rejected_code,
-                    })
+        # No reference-solution fallback: DPO pairs must come from the model's
+        # own execution-grounded rollouts so the comparison remains methodologically clean.
 
         if (idx + 1) % 5 == 0 or (idx + 1) == total:
             print(f"   [Progress: {idx + 1}/{total}] Generated {len(pairs)} preference pairs...", flush=True)
