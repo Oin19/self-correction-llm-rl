@@ -79,6 +79,9 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         if "lora_" in n or "v_head" in n or "summary" in n: p.requires_grad=True
     trainable=[p for p in model.parameters() if p.requires_grad]
     if not trainable: raise RuntimeError("PPO has no trainable parameters")
+    trainable_count=sum(p.numel() for p in trainable)
+    total_count=sum(p.numel() for p in model.parameters())
+    print(f"PPO trainable parameters: {trainable_count:,} / {total_count:,} ({100.0*trainable_count/total_count:.4f}%)",flush=True)
     opt=torch.optim.AdamW(trainable,lr=learning_rate)
     cfg=PPOConfig(model_name=base,learning_rate=learning_rate,batch_size=batch_size,mini_batch_size=mini_batch_size,gradient_accumulation_steps=gradient_accumulation_steps,kl_penalty="kl",init_kl_coef=init_kl_coef,target_kl=target_kl)
     collate=lambda rows:{k:[r[k] for r in rows] for k in rows[0]}
@@ -94,6 +97,8 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
             start_i = (step - 1) * batch_size
             end_i = start_i + len(queries)
             batch_tests = all_benchmark_tests[start_i:end_i]
+        if len(batch_tests) != len(responses):
+            raise RuntimeError(f"Benchmark-test/response mismatch: {len(batch_tests)} tests vs {len(responses)} responses")
         for sample_idx,(response,tests) in enumerate(zip(responses,batch_tests)):
             if not tests: raise ValueError("No executable benchmark tests; refusing process-only reward")
             code=tokenizer.decode(response,skip_special_tokens=True)
