@@ -252,6 +252,7 @@ class PythonSandbox:
         script = f"{code}\n\n"
         if "assertion" in test_case:
             script += (
+                "import sys, traceback\n"
                 "try:\n"
                 f"    {test_case['assertion']}\n"
                 "    print('PASSED_TEST_MARKER')\n"
