@@ -74,14 +74,17 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         with torch.no_grad(): responses=trainer.generate(queries,**kwargs)
         rewards=[]
         batch_tests = batch.get("benchmark_tests")
-        if batch_tests is None:
+        if not batch_tests:
             start_i = (step - 1) * batch_size
             end_i = start_i + len(queries)
             batch_tests = all_benchmark_tests[start_i:end_i]
         for response,tests in zip(responses,batch_tests):
             if not tests: raise ValueError("No executable benchmark tests; refusing process-only reward")
             code=tokenizer.decode(response,skip_special_tokens=True)
-            # Always use the benchmark harness for explicit tests.\n            result = sandbox.run_tests(code, tests).to_dict()\n            rewards.append(torch.tensor(compute_partial_reward(result),dtype=torch.float32))
+            result = sandbox.run_tests(code, tests).to_dict()
+            rewards.append(torch.tensor(compute_partial_reward(result),dtype=torch.float32))
+        if not rewards:
+            raise ValueError("No rewards generated for batch; benchmark tests missing or empty")
         stats=trainer.step(queries,responses,rewards)
         print("PPO step %d reward=%.3f kl=%.3f"%(step,stats.get("ppo/mean_scores",0.0),stats.get("objective/kl",0.0)),flush=True)
         if max_steps and step>=max_steps: break
