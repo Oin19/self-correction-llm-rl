@@ -23,6 +23,10 @@ class ExecutionRewardRegressionTests(unittest.TestCase):
             reward = compute_partial_reward(result)
             self.assertAlmostEqual(reward, expected[name], places=6, msg=name)
 
+    def test_zero_pass_nonfatal_result_is_zero(self):
+        result = {"status": "WA", "passed_tests": 0, "total_tests": 10}
+        self.assertEqual(compute_partial_reward(result), 0.0)
+
     def test_empty_suite_is_not_success(self):
         result = self.sandbox.run_tests("print('hello')", [])
         self.assertNotEqual(result.status, "AC")
