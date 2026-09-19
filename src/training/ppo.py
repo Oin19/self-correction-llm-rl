@@ -3,6 +3,7 @@ import gc, json, os
 import torch
 from peft import PeftModel
 from src.execution.executor import PythonSandbox
+from src.models.generation import extract_code_block
 from src.rewards.execution_reward import compute_partial_reward
 from trl import PPOTrainer, PPOConfig
 from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
@@ -101,7 +102,8 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
             raise RuntimeError(f"Benchmark-test/response mismatch: {len(batch_tests)} tests vs {len(responses)} responses")
         for sample_idx,(response,tests) in enumerate(zip(responses,batch_tests)):
             if not tests: raise ValueError("No executable benchmark tests; refusing process-only reward")
-            code=tokenizer.decode(response,skip_special_tokens=True)
+            raw_response=tokenizer.decode(response,skip_special_tokens=True)
+            code=extract_code_block(raw_response)
             result=sandbox.run_tests(code,tests).to_dict()
             reward=compute_partial_reward(result)
             rewards.append(torch.tensor(reward,dtype=torch.float32))
@@ -114,9 +116,9 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
             print("Generated code preview:",(code[-800:] if code else "<EMPTY>").replace("\n"," "),flush=True)
         if not rewards: raise ValueError("No rewards generated for batch; benchmark tests missing or empty")
         before_norm=_parameter_snapshot(trainable)
+        grad_norm=_gradient_norm(trainable)
         stats=trainer.step(queries,responses,rewards)
         after_norm=_parameter_snapshot(trainable)
-        grad_norm=_gradient_norm(trainable)
         delta_norm=abs(after_norm-before_norm)
         mean_reward=stats.get("ppo/mean_scores",stats.get("objective/scores",0.0))
         kl_value=stats.get("objective/kl",stats.get("ppo/policy/approxkl_avg",0.0))
