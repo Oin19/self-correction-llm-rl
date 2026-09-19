@@ -381,22 +381,26 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - Base model (`deepseek-ai/deepseek-coder-1.3b-instruct`) loaded in FP16 precision with `AutoModelForCausalLMWithValueHead`.
   - LoRA adapter parameters enabled for training (`lora_` and `v_head`).
 
-### Step 2: 2-Step PPO Smoke Test Execution & Parameter Tracking
+### Step 2: 2-Step PPO Smoke Test Execution & Parameter Tracking (Batch Size 2)
 - **Trainable Parameters**: `3,147,777 / 1,349,619,713` (`0.2332%`)
-- **Reward Preflight (Cell 2)**: `perfect=1.000 (2/2)`, `partial=0.500 (1/2)`, `bad=-0.200 (0/2)` (`PASS`)
-- **Sample 1 (Step 1)**: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200`
+- **Batch Size Configuration**: `batch_size=2`, `mini_batch_size=2` (TRL `std()` warnings eliminated)
+- **Step 1 Samples**:
+  - `idx=0`: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200`
+  - `idx=1`: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200`
 - **Rollout Step 1 Metrics**:
   - `reward`: `-0.200`
   - `kl`: `0.000`
-  - `param_norm_delta`: `3.371545e-05`
+  - `param_norm_delta`: `4.458646e-05`
   - `grad_norm`: `0.000000e+00`
-- **Sample 2 (Step 2)**: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200`
+- **Step 2 Samples**:
+  - `idx=0`: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200` (Code preview: `@Valid def * /** @ApiEntityFieldInfoter ...`)
+  - `idx=1`: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200` (Code preview: `// break; }; ... public static uint32000000 ...`)
 - **Rollout Step 2 Metrics**:
   - `reward`: `-0.200`
-  - `kl`: `-0.175`
-  - `param_norm_delta`: `1.771128e-05`
+  - `kl`: `0.050`
+  - `param_norm_delta`: `5.742187e-05`
   - `grad_norm`: `0.000000e+00`
-- **Verification Status**: **PASSED** (SFT adapter loaded, reward preflight verified, 2 PPO steps completed successfully without errors).
+- **Verification Status**: **PASSED** (SFT adapter loaded, batch_size=2 verified, code extraction active, 2 PPO steps completed successfully without errors).
 
 ---
 
