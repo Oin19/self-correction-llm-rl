@@ -14,13 +14,11 @@ def compute_reward(status: str, tests_passed: int = 0, total_tests: int = 0) -> 
     """
     if status == "AC":
         return 1.0
-    elif status in ("WA", "TLE", "MLE", "PE") and total_tests > 0 and tests_passed > 0:
+    elif status in ("WA", "TLE", "MLE", "PE") and total_tests > 0:
         return float(tests_passed / total_tests)
-    elif status in ("CE", "RE") and tests_passed == 0:
+    elif status in ("CE", "RE"):
         return -0.2
-    elif total_tests > 0 and tests_passed > 0:
-        return float(tests_passed / total_tests)
-    return -0.2
+    return 0.0
 
 
 def compute_reward_binary(status: str, tests_passed: int = 0, total_tests: int = 0) -> float:
@@ -61,8 +59,11 @@ def compute_partial_reward(
     if status in (ExecutionStatus.CE, ExecutionStatus.RE, ExecutionStatus.TLE, ExecutionStatus.MLE):
         return penalty
 
-    if total > 0 and passed > 0:
+    if total > 0 and status in (ExecutionStatus.WA, ExecutionStatus.PE, ExecutionStatus.TLE, ExecutionStatus.MLE):
         return float(passed / total)
+
+    if status in (ExecutionStatus.CE, ExecutionStatus.RE):
+        return penalty
 
     return penalty
 
