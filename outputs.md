@@ -388,8 +388,8 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - **KL Divergence**: `0.000`
 - **Rollout Step 2**:
   - **Mean Reward**: `-0.200`
-  - **KL Divergence**: `-0.048`
-- **Verification Status**: **PASSED** (SFT adapter loaded, benchmark test execution verified, 2 PPO steps completed successfully without errors).
+  - **KL Divergence**: `-0.113`
+- **Verification Status**: **PASSED** (SFT adapter loaded, reward plumbing verified, 2 PPO steps completed successfully without errors).
 
 ---
 
