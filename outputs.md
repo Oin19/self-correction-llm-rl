@@ -381,15 +381,22 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - Base model (`deepseek-ai/deepseek-coder-1.3b-instruct`) loaded in FP16 precision with `AutoModelForCausalLMWithValueHead`.
   - LoRA adapter parameters enabled for training (`lora_` and `v_head`).
 
-### Step 2: 2-Step PPO Smoke Test Execution
-- **Smoke Dataset**: 16 APPS problem examples with non-empty benchmark test suites.
-- **Rollout Step 1**:
-  - **Mean Reward**: `-0.200`
-  - **KL Divergence**: `0.000`
-- **Rollout Step 2**:
-  - **Mean Reward**: `-0.200`
-  - **KL Divergence**: `-0.113`
-- **Verification Status**: **PASSED** (SFT adapter loaded, reward plumbing verified, 2 PPO steps completed successfully without errors).
+### Step 2: 2-Step PPO Smoke Test Execution & Parameter Tracking
+- **Trainable Parameters**: `3,147,777 / 1,349,619,713` (`0.2332%`)
+- **Reward Preflight (Cell 2)**: `perfect=1.000 (2/2)`, `partial=0.500 (1/2)`, `bad=-0.200 (0/2)` (`PASS`)
+- **Sample 1 (Step 1)**: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200`
+- **Rollout Step 1 Metrics**:
+  - `reward`: `-0.200`
+  - `kl`: `0.000`
+  - `param_norm_delta`: `3.371545e-05`
+  - `grad_norm`: `0.000000e+00`
+- **Sample 2 (Step 2)**: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200`
+- **Rollout Step 2 Metrics**:
+  - `reward`: `-0.200`
+  - `kl`: `-0.175`
+  - `param_norm_delta`: `1.771128e-05`
+  - `grad_norm`: `0.000000e+00`
+- **Verification Status**: **PASSED** (SFT adapter loaded, reward preflight verified, 2 PPO steps completed successfully without errors).
 
 ---
 
