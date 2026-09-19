@@ -35,6 +35,22 @@ def load_sft_adapter(path,device_map):
     wrapper.pretrained_model=PeftModel.from_pretrained(wrapper.pretrained_model,path,is_trainable=True)
     return wrapper,base
 
+def _parameter_snapshot(parameters):
+    total_sq = 0.0
+    for p in parameters:
+        if p.requires_grad:
+            total_sq += float(p.detach().float().pow(2).sum().item())
+    return total_sq ** 0.5
+
+def _gradient_norm(parameters):
+    total_sq = 0.0
+    found = False
+    for p in parameters:
+        if p.requires_grad and p.grad is not None:
+            found = True
+            total_sq += float(p.grad.detach().float().pow(2).sum().item())
+    return (total_sq ** 0.5) if found else 0.0
+
 def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/ppo",num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.02,target_kl=6.0,max_steps=10):
     tokenizer.padding_side="left"
     if tokenizer.pad_token is None: tokenizer.pad_token=tokenizer.eos_token
@@ -78,15 +94,32 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
             start_i = (step - 1) * batch_size
             end_i = start_i + len(queries)
             batch_tests = all_benchmark_tests[start_i:end_i]
-        for response,tests in zip(responses,batch_tests):
+        for sample_idx,(response,tests) in enumerate(zip(responses,batch_tests)):
             if not tests: raise ValueError("No executable benchmark tests; refusing process-only reward")
             code=tokenizer.decode(response,skip_special_tokens=True)
-            result = sandbox.run_tests(code, tests).to_dict()
-            rewards.append(torch.tensor(compute_partial_reward(result),dtype=torch.float32))
-        if not rewards:
-            raise ValueError("No rewards generated for batch; benchmark tests missing or empty")
+            result=sandbox.run_tests(code,tests).to_dict()
+            reward=compute_partial_reward(result)
+            rewards.append(torch.tensor(reward,dtype=torch.float32))
+            print(
+                f"PPO sample step={step} idx={sample_idx}: "
+                f"status={result['status']} passed={result['passed_tests']}/{result['total_tests']} "
+                f"reward={reward:.3f}",
+                flush=True,
+            )
+            print("Generated code preview:",(code[-800:] if code else "<EMPTY>").replace("\n"," "),flush=True)
+        if not rewards: raise ValueError("No rewards generated for batch; benchmark tests missing or empty")
+        before_norm=_parameter_snapshot(trainable)
         stats=trainer.step(queries,responses,rewards)
-        print("PPO step %d reward=%.3f kl=%.3f"%(step,stats.get("ppo/mean_scores",0.0),stats.get("objective/kl",0.0)),flush=True)
+        after_norm=_parameter_snapshot(trainable)
+        grad_norm=_gradient_norm(trainable)
+        delta_norm=abs(after_norm-before_norm)
+        mean_reward=stats.get("ppo/mean_scores",stats.get("objective/scores",0.0))
+        kl_value=stats.get("objective/kl",stats.get("ppo/policy/approxkl_avg",0.0))
+        print(
+            f"PPO step {step}: reward={float(mean_reward):.3f} kl={float(kl_value):.3f} "
+            f"param_norm_delta={delta_norm:.6e} grad_norm={grad_norm:.6e}",
+            flush=True,
+        )
         if max_steps and step>=max_steps: break
     final_dir = os.path.join(output_dir, "final")
     os.makedirs(final_dir, exist_ok=True)
@@ -97,5 +130,5 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
     with open(os.path.join(final_dir, "ppo_metadata.json"), "w", encoding="utf-8") as f:
-        json.dump({"base_model": base, "checkpoint_type": "ppo_policy_adapter"}, f, indent=2)
+        json.dump({"base_model": base, "checkpoint_type": "ppo_policy_adapter", "reward_type": "execution_dense_partial_test_fraction", "execution_tests_required": True, "trainable_parameters": trainable_count, "total_parameters": total_count}, f, indent=2)
     return trainer
