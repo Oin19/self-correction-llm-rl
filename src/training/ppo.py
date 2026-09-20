@@ -94,7 +94,17 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     kwargs={"max_new_tokens":256,"do_sample":True,"top_p":0.95,"pad_token_id":tokenizer.pad_token_id,"eos_token_id":tokenizer.eos_token_id}
     for step,batch in enumerate(trainer.dataloader,1):
         queries=[q.squeeze() if isinstance(q,torch.Tensor) and q.dim()>1 else torch.as_tensor(q,dtype=torch.long) for q in batch["input_ids"]]
+        if hasattr(model.pretrained_model, "gradient_checkpointing_disable"):
+            try: model.pretrained_model.gradient_checkpointing_disable()
+            except Exception: pass
+        if hasattr(model.pretrained_model, "config"):
+            model.pretrained_model.config.use_cache = True
         with torch.no_grad(): responses=trainer.generate(queries,**kwargs)
+        if hasattr(model.pretrained_model, "gradient_checkpointing_enable"):
+            try: model.pretrained_model.gradient_checkpointing_enable()
+            except Exception: pass
+        if hasattr(model.pretrained_model, "config"):
+            model.pretrained_model.config.use_cache = False
         rewards=[]
         batch_tests = batch.get("benchmark_tests")
         if not batch_tests:
