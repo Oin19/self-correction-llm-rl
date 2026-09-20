@@ -60,6 +60,41 @@ class TestExecutor(unittest.TestCase):
         self.assertEqual(res.status, ExecutionStatus.TLE)
         self.assertEqual(res.passed_tests, 0)
 
+    def test_io_canonical_ac(self):
+        sandbox = PythonSandbox()
+        code = "import sys\ndata = sys.stdin.read().split()\nif data:\n    print(int(data[0]) * 2)\n"
+        test_cases = [{"input": "5\n", "output": "10\n"}]
+        res = sandbox.run_tests(code, test_cases)
+        self.assertEqual(res.status, ExecutionStatus.AC)
+        self.assertEqual(res.passed_tests, 1)
+
+    def test_io_solve_autocall_ac(self):
+        sandbox = PythonSandbox()
+        code = "def solve():\n    import sys\n    data = sys.stdin.read().split()\n    if data:\n        print(int(data[0]) + 10)\n"
+        test_cases = [{"input": "5\n", "output": "15\n"}]
+        res = sandbox.run_tests(code, test_cases)
+        self.assertEqual(res.status, ExecutionStatus.AC)
+        self.assertEqual(res.passed_tests, 1)
+
+    def test_io_wrong_answer_wa(self):
+        sandbox = PythonSandbox()
+        code = "import sys\ndata = sys.stdin.read().split()\nif data:\n    print(int(data[0]) * 999)\n"
+        test_cases = [{"input": "5\n", "output": "10\n"}]
+        res = sandbox.run_tests(code, test_cases)
+        self.assertEqual(res.status, ExecutionStatus.WA)
+        self.assertEqual(res.passed_tests, 0)
+
+    def test_io_compilation_and_runtime_errors(self):
+        sandbox = PythonSandbox()
+        ce_code = "def solve():\n    return 42 invalid_syntax"
+        re_code = "import sys\nx = 1 / 0"
+        test_cases = [{"input": "5\n", "output": "10\n"}]
+        res_ce = sandbox.run_tests(ce_code, test_cases)
+        res_re = sandbox.run_tests(re_code, test_cases)
+        self.assertEqual(res_ce.status, ExecutionStatus.CE)
+        self.assertEqual(res_re.status, ExecutionStatus.RE)
+
 
 if __name__ == "__main__":
     unittest.main()
+

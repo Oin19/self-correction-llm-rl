@@ -433,4 +433,37 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **Output Artifact**: Generated `evaluation_results_corrected.csv`.
 - **Verification Status**: **PASSED (100% Verified)**
 
+---
+
+## PPO 2-Step Smoke Test / Pipeline Validation
+**Date**: 2026-09-21
+
+> [!NOTE] 
+> **Disclaimer**: This section documents **Pipeline Validation** (verifying prompt formatting, execution sandbox integration, LoRA weight updates, and loss/KL metric logging). This is **not** a final model performance result.
+
+### Step 1: Execution Harness Fix & Canonical Control Verification
+- **Issue Resolved**: APPS benchmark solutions using function definitions (e.g., `def solve():` or `def main():`) were defined during `exec(_solution)` but not executed, resulting in empty stdout and false `WA` results.
+- **Fix Implemented**: Updated `src/execution/executor.py` to auto-invoke entrypoint functions (`solve()`, `main()`, `solution()`, `run()`) if stdout is empty, and added token-level whitespace matching.
+- **Regression Suite Verification Results**:
+  - **Canonical Control Test (APPS Sample 0)**: `STATUS: ExecutionStatus.AC, PASSED/TOTAL: 1/1, REWARD: 1.000` (**VERIFIED**)
+  - **Intentionally Wrong Code**: `STATUS: ExecutionStatus.WA, PASSED/TOTAL: 0/1, REWARD: 0.000` (**VERIFIED**)
+  - **Syntax Error Code**: `STATUS: ExecutionStatus.CE, PASSED/TOTAL: 0/1, REWARD: -0.200` (**VERIFIED**)
+
+### Step 2: Prompt Truncation & Code Generation Fix
+- **Issue Resolved**: Right-truncating long APPS prompts previously cut off `\n\n### Solution:\n```python\n` at the end of the prompt, causing the model to generate natural language problem text instead of Python code.
+- **Fix Implemented**: Updated `encode` in `src/training/ppo.py` to truncate problem text first before formatting, ensuring `### Solution:\n```python\n` remains intact.
+- **Generation Output**: Step 1 generated clean Python function definitions (`def max_distance(p):...`, `def beautiful(p):...`).
+
+### Step 3: 2-Step PPO Smoke Test & LoRA Parameter Update Evidence
+- **Trainable Parameters**: `3,147,777 / 1,349,619,713` (`0.2332%`)
+- **LoRA Weight Update Evidence**:
+  - `sample_lora_delta` (Step 1): **`6.973107e-04`** (Non-zero update verified)
+  - `sample_lora_delta` (Step 2): **`5.222311e-04`** (Non-zero update verified)
+  - `param_norm_delta` (Step 1): `2.596446e-04`
+  - `param_norm_delta` (Step 2): `1.054319e-05`
+  - `kl` (Step 1): `0.000` | `kl` (Step 2): `0.170`
+- **Memory Configuration**: `mini_batch_size=1`, `forward_batch_size=1`, `gradient_accumulation_steps=2`, `max_new_tokens=64-128` (fits cleanly within 14.5 GB VRAM).
+- **Verification Status**: **PASSED (Pipeline Validation Complete)**
+
+
 

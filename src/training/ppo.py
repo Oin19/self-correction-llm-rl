@@ -61,7 +61,10 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     all_benchmark_tests=[normalize_tests(ex) for ex in dataset]
     def encode(ex):
         p=ex.get("question",ex.get("prompt",""))
-        t=tokenizer("### Problem:\n%s\n\n### Solution:\n```python\n"%p,truncation=True,max_length=256)
+        p_ids=tokenizer.encode(p,truncation=True,max_length=350)
+        p_clean=tokenizer.decode(p_ids,skip_special_tokens=True)
+        prompt=f"### Problem:\n{p_clean}\n\n### Solution:\n```python\n"
+        t=tokenizer(prompt,truncation=False)
         return {"input_ids":t["input_ids"],"benchmark_tests":normalize_tests(ex)}
     dataset=dataset.map(encode)
     gc.collect()
@@ -88,7 +91,7 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     collate=lambda rows:{k:[r[k] for r in rows] for k in rows[0]}
     trainer=PPOTrainer(config=cfg,model=model,ref_model=None,tokenizer=tokenizer,dataset=dataset,optimizer=opt,data_collator=collate)
     sandbox=PythonSandbox(default_timeout=5.0,max_memory_mb=1024.0)
-    kwargs={"max_new_tokens":64,"do_sample":True,"top_p":0.95,"pad_token_id":tokenizer.pad_token_id,"eos_token_id":tokenizer.eos_token_id}
+    kwargs={"max_new_tokens":256,"do_sample":True,"top_p":0.95,"pad_token_id":tokenizer.pad_token_id,"eos_token_id":tokenizer.eos_token_id}
     for step,batch in enumerate(trainer.dataloader,1):
         queries=[q.squeeze() if isinstance(q,torch.Tensor) and q.dim()>1 else torch.as_tensor(q,dtype=torch.long) for q in batch["input_ids"]]
         with torch.no_grad(): responses=trainer.generate(queries,**kwargs)
@@ -115,19 +118,21 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
             )
             print("Generated code preview:",(code[-800:] if code else "<EMPTY>").replace("\n"," "),flush=True)
         if not rewards: raise ValueError("No rewards generated for batch; benchmark tests missing or empty")
-        before_norm=_parameter_snapshot(trainable)
-        grad_norm=_gradient_norm(trainable)
-        stats=trainer.step(queries,responses,rewards)
-        after_norm=_parameter_snapshot(trainable)
-        delta_norm=abs(after_norm-before_norm)
-        mean_reward=stats.get("ppo/mean_scores",stats.get("objective/scores",0.0))
-        kl_value=stats.get("objective/kl",stats.get("ppo/policy/approxkl_avg",0.0))
+        before_norm = _parameter_snapshot(trainable)
+        sample_lora_before = trainable[0].detach().clone() if trainable else None
+        stats = trainer.step(queries, responses, rewards)
+        after_norm = _parameter_snapshot(trainable)
+        delta_norm = abs(after_norm - before_norm)
+        sample_lora_delta = torch.norm(trainable[0].detach() - sample_lora_before).item() if sample_lora_before is not None else 0.0
+        mean_reward = stats.get("ppo/mean_scores", stats.get("objective/scores", 0.0))
+        kl_value = stats.get("objective/kl", stats.get("ppo/policy/approxkl_avg", 0.0))
+        trl_grad_norm = stats.get("ppo/policy/grad_norm", stats.get("ppo/val/grad_norm", stats.get("grad_norm", 0.0)))
         print(
             f"PPO step {step}: reward={float(mean_reward):.3f} kl={float(kl_value):.3f} "
-            f"param_norm_delta={delta_norm:.6e} grad_norm={grad_norm:.6e}",
+            f"param_norm_delta={delta_norm:.6e} sample_lora_delta={sample_lora_delta:.6e} grad_norm={float(trl_grad_norm):.6e}",
             flush=True,
         )
-        if max_steps and step>=max_steps: break
+        if max_steps and step >= max_steps: break
     final_dir = os.path.join(output_dir, "final")
     os.makedirs(final_dir, exist_ok=True)
     policy = getattr(model, "pretrained_model", model)
