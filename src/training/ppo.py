@@ -9,21 +9,32 @@ from trl import PPOTrainer, PPOConfig
 from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
 
 def normalize_tests(ex):
-    if isinstance(ex.get("test"), str) and ex["test"].strip(): return [ex["test"]]
-    if isinstance(ex.get("test_list"), list) and ex["test_list"]: return [{"assertion": x} for x in ex["test_list"] if isinstance(x,str) and x.strip()]
-    raw=ex.get("input_output",ex.get("test_cases",[]))
-    if isinstance(raw,str):
-        try: raw=json.loads(raw)
-        except Exception: return []
-    if isinstance(raw,list): return raw
-    if not isinstance(raw,dict): return []
-    ins,outs,fn=raw.get("inputs",[]),raw.get("outputs",[]),raw.get("fn_name")
-    cases=[]
-    for inp,out in zip(ins,outs):
+    if isinstance(ex.get("test"), str) and ex["test"].strip():
+        lines = [line.strip() for line in ex["test"].splitlines() if line.strip()]
+        assert_lines = [line for line in lines if line.startswith("assert ") or "assert " in line]
+        if assert_lines:
+            return [{"assertion": line} for line in assert_lines]
+        return [ex["test"]]
+    if isinstance(ex.get("test_list"), list) and ex["test_list"]:
+        return [{"assertion": x} for x in ex["test_list"] if isinstance(x, str) and x.strip()]
+    raw = ex.get("input_output", ex.get("test_cases", []))
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return []
+    if isinstance(raw, list):
+        return raw
+    if not isinstance(raw, dict):
+        return []
+    ins, outs, fn = raw.get("inputs", []), raw.get("outputs", []), raw.get("fn_name")
+    cases = []
+    for inp, out in zip(ins, outs):
         if fn:
-            args=", ".join(repr(x) for x in inp) if isinstance(inp,list) else repr(inp)
-            cases.append({"assertion":f"assert {fn}({args}) == {out!r}"})
-        else: cases.append({"input":"\n".join(inp) if isinstance(inp,list) else str(inp),"output":"\n".join(out) if isinstance(out,list) else str(out)})
+            args = ", ".join(repr(x) for x in inp) if isinstance(inp, list) else repr(inp)
+            cases.append({"assertion": f"assert {fn}({args}) == {out!r}"})
+        else:
+            cases.append({"input": "\n".join(inp) if isinstance(inp, list) else str(inp), "output": "\n".join(out) if isinstance(out, list) else str(out)})
     return cases
 
 def load_sft_adapter(path,device_map):
@@ -135,8 +146,8 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         delta_norm = abs(after_norm - before_norm)
         sample_lora_delta = torch.norm(trainable[0].detach() - sample_lora_before).item() if sample_lora_before is not None else 0.0
         mean_reward = stats.get("ppo/mean_scores", stats.get("objective/scores", 0.0))
-        kl_value = stats.get("objective/kl", stats.get("ppo/policy/approxkl_avg", 0.0))
-        trl_grad_norm = stats.get("ppo/policy/grad_norm", stats.get("ppo/val/grad_norm", stats.get("grad_norm", 0.0)))
+        kl_value = stats.get("objective/kl", stats.get("ppo/policy/approxkl_avg", stats.get("ppo/policy/kl", 0.0)))
+        trl_grad_norm = stats.get("ppo/policy/policy_grad_norm", stats.get("ppo/policy/grad_norm", stats.get("ppo/val/grad_norm", stats.get("grad_norm", stats.get("loss/policy/grad_norm", 0.0)))))
         print(
             f"PPO step {step}: reward={float(mean_reward):.3f} kl={float(kl_value):.3f} "
             f"param_norm_delta={delta_norm:.6e} sample_lora_delta={sample_lora_delta:.6e} grad_norm={float(trl_grad_norm):.6e}",
