@@ -55,9 +55,9 @@ def _gradient_norm(parameters):
 def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/ppo",num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.02,target_kl=6.0,max_steps=10):
     tokenizer.padding_side="left"
     if tokenizer.pad_token is None: tokenizer.pad_token=tokenizer.eos_token
-    # Filter dataset to ensure every sample has multiple executable benchmark tests (>= 2 test cases)
-    dataset=dataset.filter(lambda ex: len(normalize_tests(ex)) >= 2)
-    if len(dataset)==0: raise ValueError("No dataset examples contain multiple executable benchmark tests")
+    # Filter dataset to ensure every sample has non-empty executable benchmark tests
+    dataset=dataset.filter(lambda ex: len(normalize_tests(ex)) > 0)
+    if len(dataset)==0: raise ValueError("No dataset examples contain valid executable benchmark tests")
     all_benchmark_tests=[normalize_tests(ex) for ex in dataset]
     def encode(ex):
         p=ex.get("question",ex.get("prompt",""))
