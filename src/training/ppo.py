@@ -37,6 +37,7 @@ def load_sft_adapter(path,device_map):
     if not base: raise ValueError("SFT adapter has no base_model_name_or_path")
     wrapper=AutoModelForCausalLMWithValueHead.from_pretrained(base,torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,device_map=device_map,trust_remote_code=True)
     wrapper.pretrained_model=PeftModel.from_pretrained(wrapper.pretrained_model,path,is_trainable=True)
+    wrapper.is_peft_model=True
     return wrapper,base
 
 def _parameter_snapshot(parameters):
