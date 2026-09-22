@@ -53,16 +53,16 @@ def compute_partial_reward(
         passed = result.get("passed_tests", 0)
         total = result.get("total_tests", 1)
 
-    if status in (ExecutionStatus.AC, "AC") or (total > 0 and passed == total):
+    if status == ExecutionStatus.AC:
         return success_reward
 
-    if total > 0 and passed > 0:
+    if status in (ExecutionStatus.CE, ExecutionStatus.RE, ExecutionStatus.TLE, ExecutionStatus.MLE):
+        return penalty
+
+    if total > 0 and status in (ExecutionStatus.WA, ExecutionStatus.PE, ExecutionStatus.TLE, ExecutionStatus.MLE):
         return float(passed / total)
 
-    if status in (ExecutionStatus.WA, "WA", ExecutionStatus.PE, "PE"):
-        return 0.0
-
-    if status in (ExecutionStatus.CE, "CE", ExecutionStatus.RE, "RE", ExecutionStatus.TLE, "TLE", ExecutionStatus.MLE, "MLE"):
+    if status in (ExecutionStatus.CE, ExecutionStatus.RE):
         return penalty
 
     return penalty

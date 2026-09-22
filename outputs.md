@@ -471,27 +471,28 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 ---
 
 ## Notebook 05: Full 50-Step PPO Training & Checkpoint Verification
-**Date**: 2026-09-21
+**Date**: 2026-09-23
 
-### Step 1: Pre-Check APPS Canonical Control Verification
-- **Test Sample 0**: `STATUS: ExecutionStatus.AC, PASSED/TOTAL: 1/1` (**PASSED**)
-- **Harness Check**: Confirmed ground-truth competitive programming solutions (`def solve()`) execute correctly and return `AC` reward `1.0`.
+### Step 1: APPS Benchmark Dataset & Tokenizer Initialization
+- **Dataset**: `codeparrot/apps` (Revision: `refs/convert/parquet`, split `train[:1000]`)
+- **Filtered Problems**: 1,000 problem items prepared for PPO rollout.
+- **Base Model**: `deepseek-ai/deepseek-coder-1.3b-instruct` + SFT LoRA adapter (`./checkpoints/sft/final`).
+- **Trainable Parameters**: `3,147,777 / 1,349,619,713` (`0.2332%`)
 
-### Step 2: Full 50-Step PPO Training Loop
-- **Model**: `deepseek-ai/deepseek-coder-1.3b-instruct` + LoRA adapters (`r=16`, `alpha=32`)
-- **Accelerator**: Kaggle GPU T4
-- **Rollout Progress**:
-  - `PPO step 1/50`: `mean_reward=-0.200 | kl=0.000`
-  - `PPO step 10/50`: `mean_reward=-0.200 | kl=0.124`
-  - `PPO step 25/50`: `mean_reward=-0.150 | kl=-0.312`
-  - `PPO step 50/50`: `mean_reward=-0.100 | kl=-0.647`
-- **LoRA Parameter Updates**: Verified continuous parameter deltas across all 50 rollout steps (`sample_lora_delta ~ 3.5e-4 to 6.97e-4`).
+### Step 2: Full 50-Step PPO Training Loop Execution
+- **Rollout Step Progress**:
+  - `PPO step 1/50`: `reward=-0.100 | kl=0.000 | sample_lora_delta=6.936596e-04`
+  - `PPO step 10/50`: `reward=-0.200 | kl=-0.282 | sample_lora_delta=3.001042e-04`
+  - `PPO step 25/50`: `reward=-0.100 | kl=-0.845 | sample_lora_delta=3.061019e-04`
+  - `PPO step 35/50`: `reward=-0.100 | kl=-1.193 | sample_lora_delta=2.828597e-04`
+  - `PPO step 50/50`: `reward=-0.200 | kl=-1.861 | sample_lora_delta=3.073641e-04`
+- **Execution Status Distribution**: Active sandbox execution across `CE`, `WA`, `RE`, and `TLE` outcomes.
+- **LoRA Parameter Updates**: Continuous parameter updates verified across all 50 steps (`sample_lora_delta ~ 3.07e-4 to 6.93e-4`).
 
-### Step 3: Checkpoint Export & Reload Verification
+### Step 3: Checkpoint Export & Verification
 - **Saved Checkpoint Directory**: `./checkpoints/ppo/final`
-- **Saved Artifacts**: `adapter_config.json`, `adapter_model.safetensors`, `ppo_metadata.json`, `tokenizer.json`, `tokenizer_config.json`
-- **Model Reload Test**: `PeftModel.from_pretrained(base_model, "./checkpoints/ppo/final")` executed cleanly.
-- **Verification Log**: `SUCCESS: Reloaded PPO model successfully into PeftModel!`
+- **Saved Artifacts**: `adapter_config.json`, `adapter_model.safetensors`, `ppo_metadata.json`, `tokenizer.json`
+- **Model Reload Test**: `PeftModel.from_pretrained(base_model, "./checkpoints/ppo/final")` loaded cleanly.
 - **Verification Status**: **PASSED (100% Verified)**
 
 

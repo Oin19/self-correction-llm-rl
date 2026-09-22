@@ -153,8 +153,6 @@ class PythonSandbox:
                 status = "MLE"
             elif "SyntaxError" in stderr or "IndentationError" in stderr:
                 status = "CE"
-            elif "AssertionError" in stderr:
-                status = "WA"
             else:
                 status = "RE"
             return ExecutionResult(status, 0, 1, stdout, stderr, stderr.strip(), execution_time=elapsed)

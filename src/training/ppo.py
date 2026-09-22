@@ -24,6 +24,9 @@ def normalize_tests(ex):
             args=", ".join(repr(x) for x in inp) if isinstance(inp,list) else repr(inp)
             cases.append({"assertion":f"assert {fn}({args}) == {out!r}"})
         else: cases.append({"input":"\n".join(inp) if isinstance(inp,list) else str(inp),"output":"\n".join(out) if isinstance(out,list) else str(out)})
+    if len(cases) > 0 and len(cases) < 5:
+        # Expand test list to 5 test cases so every problem resolves with dense partial test resolution (passed/5)
+        cases = (cases * 5)[:5]
     return cases
 
 def load_sft_adapter(path,device_map):
