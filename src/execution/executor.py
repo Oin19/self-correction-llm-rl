@@ -267,6 +267,14 @@ class PythonSandbox:
         if "assertion" in test_case:
             script += (
                 "import sys, traceback\n"
+                "if 'Solution' in globals() and isinstance(globals()['Solution'], type):\n"
+                "    try:\n"
+                "        _sol_inst = globals()['Solution']()\n"
+                "        for _attr in dir(_sol_inst):\n"
+                "            if not _attr.startswith('_') and callable(getattr(_sol_inst, _attr)) and _attr not in globals():\n"
+                "                globals()[_attr] = getattr(_sol_inst, _attr)\n"
+                "    except Exception:\n"
+                "        pass\n"
                 "try:\n"
                 f"    {test_case['assertion']}\n"
                 "    print('PASSED_TEST_MARKER')\n"
