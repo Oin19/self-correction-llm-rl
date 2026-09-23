@@ -43,7 +43,13 @@ def compute_partial_reward(
     success_reward: float = 1.0,
     penalty: float = -0.2,
 ) -> float:
-    """Computes partial test execution reward (passed_fraction if no fatal error, else penalty)."""
+    """Computes partial test execution reward.
+
+    - AC -> success_reward
+    - Any non-AC status with passed > 0 -> passed/total (partial credit is never discarded)
+    - WA/PE with 0 passed -> 0.0
+    - CE/RE/TLE/MLE (or empty suite) with 0 passed -> penalty
+    """
     if isinstance(result, ExecutionResult):
         status = result.status
         passed = result.passed_tests
@@ -56,14 +62,11 @@ def compute_partial_reward(
     if status == ExecutionStatus.AC:
         return success_reward
 
-    if status in (ExecutionStatus.CE, ExecutionStatus.RE, ExecutionStatus.TLE, ExecutionStatus.MLE):
-        return penalty
-
-    if total > 0 and status in (ExecutionStatus.WA, ExecutionStatus.PE, ExecutionStatus.TLE, ExecutionStatus.MLE):
+    if total > 0 and passed > 0:
         return float(passed / total)
 
-    if status in (ExecutionStatus.CE, ExecutionStatus.RE):
-        return penalty
+    if status in (ExecutionStatus.WA, ExecutionStatus.PE):
+        return 0.0
 
     return penalty
 

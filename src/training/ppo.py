@@ -5,29 +5,9 @@ from peft import PeftModel
 from src.execution.executor import PythonSandbox
 from src.models.generation import extract_code_block
 from src.rewards.execution_reward import compute_partial_reward
+from src.utils.test_cases import normalize_tests
 from trl import PPOTrainer, PPOConfig
 from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
-
-def normalize_tests(ex):
-    if isinstance(ex.get("test"), str) and ex["test"].strip(): return [ex["test"]]
-    if isinstance(ex.get("test_list"), list) and ex["test_list"]: return [{"assertion": x} for x in ex["test_list"] if isinstance(x,str) and x.strip()]
-    raw=ex.get("input_output",ex.get("test_cases",[]))
-    if isinstance(raw,str):
-        try: raw=json.loads(raw)
-        except Exception: return []
-    if isinstance(raw,list): return raw
-    if not isinstance(raw,dict): return []
-    ins,outs,fn=raw.get("inputs",[]),raw.get("outputs",[]),raw.get("fn_name")
-    cases=[]
-    for inp,out in zip(ins,outs):
-        if fn:
-            args=", ".join(repr(x) for x in inp) if isinstance(inp,list) else repr(inp)
-            cases.append({"assertion":f"assert {fn}({args}) == {out!r}"})
-        else: cases.append({"input":"\n".join(inp) if isinstance(inp,list) else str(inp),"output":"\n".join(out) if isinstance(out,list) else str(out)})
-    if len(cases) > 0 and len(cases) < 5:
-        # Expand test list to 5 test cases so every problem resolves with dense partial test resolution (passed/5)
-        cases = (cases * 5)[:5]
-    return cases
 
 def load_sft_adapter(path,device_map):
     cfg_path=os.path.join(path,"adapter_config.json")
@@ -56,7 +36,7 @@ def _gradient_norm(parameters):
             total_sq += float(p.grad.detach().float().pow(2).sum().item())
     return (total_sq ** 0.5) if found else 0.0
 
-def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/ppo",num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.02,target_kl=6.0,max_steps=10):
+def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/ppo",num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.05,target_kl=6.0,max_steps=10):
     tokenizer.padding_side="left"
     if tokenizer.pad_token is None: tokenizer.pad_token=tokenizer.eos_token
     # Filter dataset to ensure every sample has non-empty executable benchmark tests
@@ -106,7 +86,7 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         batch_size=batch_size,
         mini_batch_size=mini_batch_size,
         gradient_accumulation_steps=gradient_accumulation_steps,
-        kl_penalty="kl",
+        kl_penalty="abs",
         init_kl_coef=init_kl_coef,
         target_kl=target_kl,
         adap_kl_ctrl=True,
@@ -114,10 +94,18 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     collate=lambda rows:{k:[r[k] for r in rows] for k in rows[0]}
     trainer=PPOTrainer(config=cfg,model=model,ref_model=None,tokenizer=tokenizer,dataset=dataset,optimizer=opt,data_collator=collate)
     sandbox=PythonSandbox(default_timeout=5.0,max_memory_mb=1024.0)
+    # temperature=1.0 keeps sampling aligned with TRL logprob scoring (temperature>1 or <1
+    # during generate() biases objective/kl and can drive the adaptive controller negative).
+    gen_target = getattr(model, "pretrained_model", model)
+    gen_cfg = getattr(gen_target, "generation_config", None)
+    if gen_cfg is not None:
+        gen_cfg.temperature = 1.0
+        gen_cfg.do_sample = True
+        gen_cfg.top_p = 0.95
     kwargs={
         "max_new_tokens":384,
         "do_sample":True,
-        "temperature":0.7,
+        "temperature":1.0,
         "top_p":0.95,
         "pad_token_id":tokenizer.pad_token_id,
         "eos_token_id":tokenizer.eos_token_id
@@ -173,9 +161,12 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         
         mean_reward = stats.get("ppo/mean_scores", stats.get("objective/scores", 0.0))
         kl_value = stats.get("objective/kl", stats.get("ppo/policy/approxkl_avg", 0.0))
-        
+        approx_kl = stats.get("ppo/policy/approxkl_avg", stats.get("objective/kl", 0.0))
+        kl_coef = stats.get("objective/kl_coef", stats.get("ppo/policy/kl_coef", float(cfg.init_kl_coef)))
+
         print(
             f"PPO step {step}: reward={float(mean_reward):.3f} kl={float(kl_value):.3f} "
+            f"approxkl={float(approx_kl):.3f} kl_coef={float(kl_coef):.4f} "
             f"param_norm_delta={delta_norm:.6e} sample_lora_delta={sample_lora_delta:.6e} grad_norm={float(real_grad_norm):.6e}",
             flush=True,
         )

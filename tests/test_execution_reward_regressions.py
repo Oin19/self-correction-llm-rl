@@ -32,6 +32,33 @@ class ExecutionRewardRegressionTests(unittest.TestCase):
         self.assertNotEqual(result.status, "AC")
         self.assertEqual(compute_partial_reward(result), -0.2)
 
+    def test_distinct_tests_not_duplicated_by_normalizer(self):
+        from src.utils.test_cases import normalize_tests
+
+        ex = {
+            "input_output": {
+                "inputs": [["1"], ["2"]],
+                "outputs": [["1"], ["2"]],
+                "fn_name": "solve",
+            }
+        }
+        cases = normalize_tests(ex)
+        self.assertEqual(len(cases), 2)
+        self.assertNotEqual(cases[0], cases[1])
+
+    def test_single_input_output_case_stays_single(self):
+        from src.utils.test_cases import normalize_tests
+
+        ex = {
+            "input_output": {
+                "inputs": [["1"]],
+                "outputs": [["1"]],
+                "fn_name": "solve",
+            }
+        }
+        cases = normalize_tests(ex)
+        self.assertEqual(len(cases), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
