@@ -39,9 +39,19 @@ def _gradient_norm(parameters):
 def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/ppo",num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.05,target_kl=6.0,max_steps=10):
     tokenizer.padding_side="left"
     if tokenizer.pad_token is None: tokenizer.pad_token=tokenizer.eos_token
-    # Filter dataset to ensure every sample has non-empty executable benchmark tests
-    dataset=dataset.filter(lambda ex: len(normalize_tests(ex)) > 0)
-    if len(dataset)==0: raise ValueError("No dataset examples contain valid executable benchmark tests")
+    # Keep only examples with executable tests. Use select() (not Dataset.filter) so a
+    # stale HF datasets cache cannot wipe the training set after normalize_tests changes.
+    n_in=len(dataset)
+    sample=dataset[0] if n_in else None
+    keep=[i for i,ex in enumerate(dataset) if len(normalize_tests(ex)) > 0]
+    if not keep:
+        keys=sorted(sample.keys()) if isinstance(sample,dict) else []
+        raise ValueError(
+            f"No dataset examples contain valid executable benchmark tests "
+            f"(input_len={n_in}, valid_len=0, columns={keys}). "
+            f"Check normalize_tests against the dataset schema."
+        )
+    dataset=dataset.select(keep)
     all_benchmark_tests=[normalize_tests(ex) for ex in dataset]
     def encode(ex):
         p=ex.get("question",ex.get("prompt",""))
