@@ -17,7 +17,9 @@ def load_sft_adapter(path,device_map,trainable=True):
     if not base: raise ValueError("SFT adapter has no base_model_name_or_path")
     wrapper=AutoModelForCausalLMWithValueHead.from_pretrained(base,torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,device_map=device_map,trust_remote_code=True)
     wrapper.pretrained_model=PeftModel.from_pretrained(wrapper.pretrained_model,path,is_trainable=trainable)
-    wrapper.is_peft_model=True
+    # TRL: is_peft_model=True forces ref logprobs via disable_adapter (base, no SFT)
+    # and ignores an explicitly passed ref_model. Keep False so KL uses our frozen SFT ref.
+    wrapper.is_peft_model=False
     if not trainable:
         for p in wrapper.parameters(): p.requires_grad=False
     return wrapper,base
@@ -55,6 +57,29 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         )
     dataset=dataset.select(keep)
     all_benchmark_tests=[normalize_tests(ex) for ex in dataset]
+    test_counts=[len(t) for t in all_benchmark_tests]
+    multi=sum(1 for c in test_counts if c>1)
+    print(
+        f"Benchmark tests: n={len(test_counts)} min={min(test_counts)} "
+        f"max={max(test_counts)} mean={sum(test_counts)/len(test_counts):.2f} "
+        f"multi_case={multi}/{len(test_counts)}",
+        flush=True,
+    )
+    for i,ex in enumerate(dataset):
+        if i>=3: break
+        raw_io=ex.get("input_output",None)
+        if isinstance(raw_io,str):
+            try: raw_io=json.loads(raw_io)
+            except Exception: pass
+        n_io=len(raw_io.get("inputs",[])) if isinstance(raw_io,dict) else (len(raw_io) if isinstance(raw_io,list) else 0)
+        tl=ex.get("test_list") or []
+        ts=ex.get("test") or ""
+        print(
+            f"  test_src[{i}]: normalize={len(all_benchmark_tests[i])} "
+            f"io_inputs={n_io} test_list={len(tl) if isinstance(tl,list) else 0} "
+            f"test_str_len={len(ts) if isinstance(ts,str) else 0}",
+            flush=True,
+        )
     def encode(ex):
         p=ex.get("question",ex.get("prompt",""))
         p_ids=tokenizer.encode(p,truncation=True,max_length=350)
@@ -100,12 +125,13 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         gradient_accumulation_steps=gradient_accumulation_steps,
         kl_penalty="abs",
         init_kl_coef=init_kl_coef,
+        target=target_kl,
         target_kl=target_kl,
         adap_kl_ctrl=True,
         horizon=100,
+        remove_unused_columns=False,
     )
-    # Explicit frozen SFT ref: ref_model=None + is_peft_model uses base (adapter off),
-    # so KL measures SFT-vs-base (~40) instead of PPO drift from the SFT policy.
+    # Frozen SFT ref: with is_peft_model=False, TRL uses this instead of disable_adapter(base).
     ref_model,_=load_sft_adapter(sft_model_path,device_map,trainable=False)
     collate=lambda rows:{k:[r[k] for r in rows] for k in rows[0]}
     trainer=PPOTrainer(config=cfg,model=model,ref_model=ref_model,tokenizer=tokenizer,dataset=dataset,optimizer=opt,data_collator=collate)
@@ -142,9 +168,10 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         rewards=[]
         batch_tests = batch.get("benchmark_tests")
         if not batch_tests:
-            start_i = (step - 1) * batch_size
-            end_i = start_i + len(queries)
-            batch_tests = all_benchmark_tests[start_i:end_i]
+            raise RuntimeError(
+                "batch is missing benchmark_tests; remove_unused_columns=False is required "
+                "so shuffled dataloader rows keep their own tests"
+            )
         if len(batch_tests) != len(responses):
             raise RuntimeError(f"Benchmark-test/response mismatch: {len(batch_tests)} tests vs {len(responses)} responses")
         for sample_idx,(response,tests) in enumerate(zip(responses,batch_tests)):
