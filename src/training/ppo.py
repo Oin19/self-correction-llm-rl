@@ -91,11 +91,37 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     total_count=sum(p.numel() for p in model.parameters())
     print(f"PPO trainable parameters: {trainable_count:,} / {total_count:,} ({100.0*trainable_count/total_count:.4f}%)",flush=True)
     opt=torch.optim.AdamW(trainable,lr=learning_rate)
-    cfg=PPOConfig(model_name=base,learning_rate=learning_rate,batch_size=batch_size,mini_batch_size=mini_batch_size,gradient_accumulation_steps=gradient_accumulation_steps,kl_penalty="kl",init_kl_coef=init_kl_coef,target_kl=target_kl)
+    
+    # Hook into optimizer.step() to capture TRUE gradient norm BEFORE zero_grad() clears p.grad!
+    captured_grad_norms = []
+    orig_opt_step = opt.step
+    def custom_opt_step(*args, **kwargs):
+        captured_grad_norms.append(_gradient_norm(trainable))
+        return orig_opt_step(*args, **kwargs)
+    opt.step = custom_opt_step
+
+    cfg=PPOConfig(
+        model_name=base,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        mini_batch_size=mini_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        kl_penalty="kl",
+        init_kl_coef=init_kl_coef,
+        target_kl=target_kl,
+        adap_kl_ctrl=True,
+    )
     collate=lambda rows:{k:[r[k] for r in rows] for k in rows[0]}
     trainer=PPOTrainer(config=cfg,model=model,ref_model=None,tokenizer=tokenizer,dataset=dataset,optimizer=opt,data_collator=collate)
     sandbox=PythonSandbox(default_timeout=5.0,max_memory_mb=1024.0)
-    kwargs={"max_new_tokens":256,"do_sample":True,"top_p":0.95,"pad_token_id":tokenizer.pad_token_id,"eos_token_id":tokenizer.eos_token_id}
+    kwargs={
+        "max_new_tokens":384,
+        "do_sample":True,
+        "temperature":0.7,
+        "top_p":0.95,
+        "pad_token_id":tokenizer.pad_token_id,
+        "eos_token_id":tokenizer.eos_token_id
+    }
     for step,batch in enumerate(trainer.dataloader,1):
         queries=[q.squeeze() if isinstance(q,torch.Tensor) and q.dim()>1 else torch.as_tensor(q,dtype=torch.long) for q in batch["input_ids"]]
         if hasattr(model.pretrained_model, "gradient_checkpointing_disable"):
@@ -134,18 +160,23 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         if not rewards: raise ValueError("No rewards generated for batch; benchmark tests missing or empty")
         before_norm = _parameter_snapshot(trainable)
         sample_lora_before = trainable[0].detach().clone() if trainable else None
+        
+        # Run PPO Step
         stats = trainer.step(queries, responses, rewards)
+        
         after_norm = _parameter_snapshot(trainable)
         delta_norm = abs(after_norm - before_norm)
         sample_lora_delta = torch.norm(trainable[0].detach() - sample_lora_before).item() if sample_lora_before is not None else 0.0
-        real_grad_norm = _gradient_norm(trainable)
+        
+        # Retrieve captured grad norm before zero_grad
+        real_grad_norm = captured_grad_norms[-1] if captured_grad_norms else 0.0
+        
         mean_reward = stats.get("ppo/mean_scores", stats.get("objective/scores", 0.0))
         kl_value = stats.get("objective/kl", stats.get("ppo/policy/approxkl_avg", 0.0))
-        trl_grad_norm = stats.get("ppo/policy/grad_norm", stats.get("ppo/val/grad_norm", stats.get("grad_norm", real_grad_norm)))
-        if trl_grad_norm == 0.0: trl_grad_norm = real_grad_norm
+        
         print(
             f"PPO step {step}: reward={float(mean_reward):.3f} kl={float(kl_value):.3f} "
-            f"param_norm_delta={delta_norm:.6e} sample_lora_delta={sample_lora_delta:.6e} grad_norm={float(trl_grad_norm):.6e}",
+            f"param_norm_delta={delta_norm:.6e} sample_lora_delta={sample_lora_delta:.6e} grad_norm={float(real_grad_norm):.6e}",
             flush=True,
         )
         if max_steps and step >= max_steps: break
