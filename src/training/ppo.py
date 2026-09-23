@@ -59,10 +59,20 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     all_benchmark_tests=[normalize_tests(ex) for ex in dataset]
     test_counts=[len(t) for t in all_benchmark_tests]
     multi=sum(1 for c in test_counts if c>1)
+    packed_totals=[]
+    for t in all_benchmark_tests:
+        pt=1
+        for c in t:
+            if isinstance(c,dict) and int(c.get("packed_tests",1) or 1)>1:
+                pt=max(pt,int(c["packed_tests"]))
+        packed_totals.append(pt)
+    n_packed=sum(1 for p in packed_totals if p>1)
     print(
         f"Benchmark tests: n={len(test_counts)} min={min(test_counts)} "
         f"max={max(test_counts)} mean={sum(test_counts)/len(test_counts):.2f} "
-        f"multi_case={multi}/{len(test_counts)}",
+        f"multi_case={multi}/{len(test_counts)} "
+        f"packed_multi={n_packed}/{len(packed_totals)} "
+        f"packed_total_max={max(packed_totals) if packed_totals else 0}",
         flush=True,
     )
     for i,ex in enumerate(dataset):
@@ -77,7 +87,8 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         print(
             f"  test_src[{i}]: normalize={len(all_benchmark_tests[i])} "
             f"io_inputs={n_io} test_list={len(tl) if isinstance(tl,list) else 0} "
-            f"test_str_len={len(ts) if isinstance(ts,str) else 0}",
+            f"test_str_len={len(ts) if isinstance(ts,str) else 0} "
+            f"packed_tests={packed_totals[i]}",
             flush=True,
         )
     def encode(ex):

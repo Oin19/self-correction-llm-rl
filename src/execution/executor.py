@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from src.execution.status import ExecutionStatus
+from src.utils.test_cases import score_io_output
 
 try:
     import resource
@@ -142,6 +143,29 @@ class PythonSandbox:
             elapsed = time.time() - start
             stdout, stderr = proc.stdout, proc.stderr
 
+            if test_case and "input" in test_case and "output" in test_case and isinstance(test_case.get("input"), str):
+                actual = self._extract_actual_output(stderr)
+                if actual is None:
+                    actual = stdout
+                expected = str(test_case.get("output", "")).strip()
+                packed = int(test_case.get("packed_tests", 1) or 1)
+                passed, total = score_io_output(actual, expected, packed)
+                tb = ""
+                if passed < total:
+                    tb = f"AssertionError: expected {total} matching segment(s)/line(s), got {passed}. expected={expected!r} actual={actual.strip()!r}"
+                if proc.returncode == 0:
+                    status = ExecutionStatus.AC if passed >= total and total > 0 else ExecutionStatus.WA
+                    return ExecutionResult(status, passed, total, actual, stderr, tb, execution_time=elapsed)
+                if proc.returncode == 2:
+                    return ExecutionResult(ExecutionStatus.WA, passed, total, actual, stderr, tb or stderr.strip(), execution_time=elapsed)
+                if "MemoryError" in stderr:
+                    status = ExecutionStatus.MLE
+                elif "SyntaxError" in stderr or "IndentationError" in stderr:
+                    status = ExecutionStatus.CE
+                else:
+                    status = ExecutionStatus.RE
+                return ExecutionResult(status, passed, total, actual, stderr, tb or stderr.strip(), execution_time=elapsed)
+
             if proc.returncode == 0 and "PASSED_TEST_MARKER" in (stdout + stderr):
                 return ExecutionResult("AC", 1, 1, stdout.replace("PASSED_TEST_MARKER", "").strip(), stderr, execution_time=elapsed)
             if proc.returncode == 0:
@@ -157,6 +181,15 @@ class PythonSandbox:
                 status = "RE"
             return ExecutionResult(status, 0, 1, stdout, stderr, stderr.strip(), execution_time=elapsed)
         except subprocess.TimeoutExpired:
+            if test_case and "input" in test_case and "output" in test_case:
+                packed = int(test_case.get("packed_tests", 1) or 1)
+                return ExecutionResult(
+                    ExecutionStatus.TLE,
+                    0,
+                    packed,
+                    stderr=f"Execution timed out after {timeout} seconds.",
+                    traceback=f"TimeoutError: Code execution exceeded {timeout}s.",
+                )
             return ExecutionResult("TLE", 0, 1, stderr=f"Execution timed out after {timeout} seconds.", traceback=f"TimeoutError: Code execution exceeded {timeout}s.")
         except Exception as e:
             return ExecutionResult("RE", 0, 1, stderr=str(e), traceback=traceback.format_exc())
@@ -181,24 +214,27 @@ class PythonSandbox:
         details = []
         first_error = ""
         overall_status = ExecutionStatus.AC
-        total = len(test_cases)
+        total = 0
         start = time.time()
 
         for i, test in enumerate(test_cases):
             if isinstance(test, str):
                 test = {"assertion": test}
             res = self.run_single(code, test_case=test, timeout=timeout_per_test)
+            case_total = res.total_tests if res.total_tests > 0 else 1
+            case_passed = max(0, min(res.passed_tests, case_total))
+            passed += case_passed
+            total += case_total
             details.append({
                 "test_index": i,
                 "status": res.status,
-                "passed": res.status == ExecutionStatus.AC,
+                "passed": case_passed,
+                "total": case_total,
                 "stdout": res.stdout,
                 "stderr": res.stderr,
                 "traceback": res.traceback,
             })
-            if res.status == ExecutionStatus.AC:
-                passed += 1
-            elif not first_error:
+            if res.status != ExecutionStatus.AC and not first_error:
                 first_error = res.traceback or res.stderr
             if res.status == ExecutionStatus.TLE:
                 overall_status = ExecutionStatus.TLE
@@ -209,7 +245,7 @@ class PythonSandbox:
             elif res.status in (ExecutionStatus.CE, ExecutionStatus.WA) and overall_status not in (ExecutionStatus.TLE, ExecutionStatus.MLE, ExecutionStatus.RE):
                 overall_status = res.status
 
-        if passed == total:
+        if total > 0 and passed == total:
             overall_status = ExecutionStatus.AC
         return ExecutionResult(
             status=overall_status,
@@ -220,19 +256,31 @@ class PythonSandbox:
             details=details,
         )
 
+    @staticmethod
+    def _extract_actual_output(stderr: str) -> Optional[str]:
+        start = "###ACTUAL###"
+        end = "###END###"
+        if start not in stderr:
+            return None
+        body = stderr.split(start, 1)[1]
+        if end not in body:
+            return None
+        return body.split(end, 1)[0]
+
     def _build_runner_script(self, code: str, test_case: Optional[Dict[str, Any]]) -> str:
         """Build a harness that executes the solution only after test I/O is installed."""
         test_case = test_case or {}
 
         if "input" in test_case and "output" in test_case and isinstance(test_case["input"], str):
             inp = repr(test_case["input"])
-            expected = repr(str(test_case["output"]).strip())
             return (
                 "import io, sys, traceback\n"
                 f"_solution = {code!r}\n"
                 f"sys.stdin = io.StringIO({inp})\n"
                 "out_buf = io.StringIO()\n"
                 "sys.stdout = out_buf\n"
+                "def _emit(actual):\n"
+                "    sys.stderr.write('###ACTUAL###' + actual + '###END###\\n')\n"
                 "try:\n"
                 "    exec(_solution, globals())\n"
                 "    actual = out_buf.getvalue().strip()\n"
@@ -248,17 +296,13 @@ class PythonSandbox:
                 "                        break\n"
                 "                except Exception:\n"
                 "                    pass\n"
-                f"    expected = {expected}\n"
-                "    actual_tokens = actual.split()\n"
-                "    expected_tokens = expected.split()\n"
-                "    if actual == expected or (actual_tokens and actual_tokens == expected_tokens):\n"
-                "        sys.stderr.write('PASSED_TEST_MARKER\\n')\n"
-                "    else:\n"
-                "        sys.stderr.write(f'AssertionError: Expected {expected!r}, got {actual!r}\\n')\n"
-                "        sys.exit(2)\n"
+                "    _emit(actual)\n"
+                "    sys.exit(0)\n"
                 "except SystemExit as e:\n"
-                "    sys.exit(e.code)\n"
+                "    _emit(out_buf.getvalue().strip())\n"
+                "    sys.exit(0 if e.code in (0, None) else 2)\n"
                 "except Exception:\n"
+                "    _emit(out_buf.getvalue().strip())\n"
                 "    traceback.print_exc(file=sys.stderr)\n"
                 "    sys.exit(1)\n"
             )
