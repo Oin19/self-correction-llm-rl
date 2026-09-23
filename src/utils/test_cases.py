@@ -2,17 +2,7 @@
 import json
 
 
-def normalize_tests(ex: dict) -> list:
-    """Normalize APPS/HumanEval/MBPP test fields into executor-ready cases.
-
-    Returns distinct test cases only — never duplicates cases to pad the count,
-    so partial rewards (passed/total) reflect real unique tests.
-    """
-    if isinstance(ex.get("test"), str) and ex["test"].strip():
-        return [ex["test"]]
-    if isinstance(ex.get("test_list"), list) and ex["test_list"]:
-        return [{"assertion": x} for x in ex["test_list"] if isinstance(x, str) and x.strip()]
-    raw = ex.get("input_output", ex.get("test_cases", []))
+def _cases_from_input_output(raw) -> list:
     if isinstance(raw, str):
         try:
             raw = json.loads(raw)
@@ -39,3 +29,31 @@ def normalize_tests(ex: dict) -> list:
                 "output": "\n".join(out) if isinstance(out, list) else str(out),
             })
     return cases
+
+
+def normalize_tests(ex: dict) -> list:
+    """Normalize APPS/HumanEval/MBPP test fields into executor-ready cases.
+
+    Prefers multi-case sources (input_output / test_list) over a monolithic
+    ``test`` script so passed/total can be > 1 and partial reward works.
+    Never duplicates cases to pad the count.
+    """
+    sources = []
+
+    raw = ex.get("input_output", ex.get("test_cases", []))
+    io_cases = _cases_from_input_output(raw)
+    if io_cases:
+        sources.append(io_cases)
+
+    if isinstance(ex.get("test_list"), list) and ex["test_list"]:
+        tl = [{"assertion": x} for x in ex["test_list"] if isinstance(x, str) and x.strip()]
+        if tl:
+            sources.append(tl)
+
+    if isinstance(ex.get("test"), str) and ex["test"].strip():
+        sources.append([ex["test"]])
+
+    if not sources:
+        return []
+    # Most cases first so partial credit has room; ties keep preference order above.
+    return max(sources, key=len)

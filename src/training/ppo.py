@@ -9,15 +9,17 @@ from src.utils.test_cases import normalize_tests
 from trl import PPOTrainer, PPOConfig
 from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
 
-def load_sft_adapter(path,device_map):
+def load_sft_adapter(path,device_map,trainable=True):
     cfg_path=os.path.join(path,"adapter_config.json")
     if not os.path.isfile(cfg_path): raise FileNotFoundError("SFT adapter not found: %s"%path)
     with open(cfg_path,encoding="utf-8") as f: cfg=json.load(f)
     base=cfg.get("base_model_name_or_path")
     if not base: raise ValueError("SFT adapter has no base_model_name_or_path")
     wrapper=AutoModelForCausalLMWithValueHead.from_pretrained(base,torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,device_map=device_map,trust_remote_code=True)
-    wrapper.pretrained_model=PeftModel.from_pretrained(wrapper.pretrained_model,path,is_trainable=True)
+    wrapper.pretrained_model=PeftModel.from_pretrained(wrapper.pretrained_model,path,is_trainable=trainable)
     wrapper.is_peft_model=True
+    if not trainable:
+        for p in wrapper.parameters(): p.requires_grad=False
     return wrapper,base
 
 def _parameter_snapshot(parameters):
@@ -100,9 +102,13 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         init_kl_coef=init_kl_coef,
         target_kl=target_kl,
         adap_kl_ctrl=True,
+        horizon=100,
     )
+    # Explicit frozen SFT ref: ref_model=None + is_peft_model uses base (adapter off),
+    # so KL measures SFT-vs-base (~40) instead of PPO drift from the SFT policy.
+    ref_model,_=load_sft_adapter(sft_model_path,device_map,trainable=False)
     collate=lambda rows:{k:[r[k] for r in rows] for k in rows[0]}
-    trainer=PPOTrainer(config=cfg,model=model,ref_model=None,tokenizer=tokenizer,dataset=dataset,optimizer=opt,data_collator=collate)
+    trainer=PPOTrainer(config=cfg,model=model,ref_model=ref_model,tokenizer=tokenizer,dataset=dataset,optimizer=opt,data_collator=collate)
     sandbox=PythonSandbox(default_timeout=5.0,max_memory_mb=1024.0)
     # temperature=1.0 keeps sampling aligned with TRL logprob scoring (temperature>1 or <1
     # during generate() biases objective/kl and can drive the adaptive controller negative).
@@ -172,7 +178,10 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
         mean_reward = stats.get("ppo/mean_scores", stats.get("objective/scores", 0.0))
         kl_value = stats.get("objective/kl", stats.get("ppo/policy/approxkl_avg", 0.0))
         approx_kl = stats.get("ppo/policy/approxkl_avg", stats.get("objective/kl", 0.0))
-        kl_coef = stats.get("objective/kl_coef", stats.get("ppo/policy/kl_coef", float(cfg.init_kl_coef)))
+        kl_coef = stats.get("objective/kl_coef", stats.get("ppo/policy/kl_coef", None))
+        if kl_coef is None:
+            kl_ctl = getattr(trainer, "kl_ctl", None)
+            kl_coef = getattr(kl_ctl, "value", float(cfg.init_kl_coef))
 
         print(
             f"PPO step {step}: reward={float(mean_reward):.3f} kl={float(kl_value):.3f} "

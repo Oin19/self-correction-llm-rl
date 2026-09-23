@@ -59,6 +59,36 @@ class ExecutionRewardRegressionTests(unittest.TestCase):
         cases = normalize_tests(ex)
         self.assertEqual(len(cases), 1)
 
+    def test_prefers_multi_case_over_monolithic_test_script(self):
+        from src.utils.test_cases import normalize_tests
+
+        ex = {
+            "test": "assert solve(1) == 1\nassert solve(2) == 2",
+            "input_output": {
+                "inputs": [["1"], ["2"], ["3"]],
+                "outputs": [["1"], ["2"], ["3"]],
+                "fn_name": "solve",
+            },
+        }
+        cases = normalize_tests(ex)
+        self.assertEqual(len(cases), 3)
+
+    def test_prefers_longer_test_list_over_single_io_case(self):
+        from src.utils.test_cases import normalize_tests
+
+        ex = {
+            "test": "assert True",
+            "test_list": ["assert f(1) == 1", "assert f(2) == 4", "assert f(3) == 9"],
+            "input_output": {
+                "inputs": [["1"]],
+                "outputs": [["1"]],
+                "fn_name": "f",
+            },
+        }
+        cases = normalize_tests(ex)
+        self.assertEqual(len(cases), 3)
+        self.assertIn("assertion", cases[0])
+
 
 if __name__ == "__main__":
     unittest.main()
