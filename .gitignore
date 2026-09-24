@@ -33,3 +33,7 @@ results/figures/*
 .DS_Store
 Thumbs.db
 *.zip
+
+# Chat exports — never commit or push
+chat_media/
+project_chat_history.md
