@@ -195,66 +195,52 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 ---
 
 ## Notebook 05: Reinforcement Learning: PPO Training
-**Date**: 2026-09-15
+**Date**: 2026-09-24 (verified rerun on `junior-A` @ `56ce85a`)
 
 ### Step 1: Environment & Module Setup
-- **Dependencies Installed**: `trl<0.12.0`, `peft`, `transformers`, `datasets`
-- **Path Resolution & Auto-Copy**: Copied `src` from `/kaggle/input/datasets/rajdeepbhowmick/self-correction-src/src` to `/kaggle/working/src`.
-- **In-Memory Patching**: Patched `src/training/ppo.py` with PyTorch Fallback ValueHead wrapper class and added module reload purge (`del sys.modules['src.training.ppo']`).
-- **Status**: `SUCCESS: Patched src/training/ppo.py with robust TRL imports & multi-GPU support! Environment initialized!`
+- **Git Clone**: Notebook Cell 2 fresh-cloned `junior-A` (no manual cell edits; `src/` pulled from branch tip).
+- **Workarounds**: `torchao-0.10.0` uninstalled successfully.
+- **Status**: `Environment initialized!`
 
 ### Step 2: Load APPS Dataset & Tokenizer
-- **Base Model**: `deepseek-ai/deepseek-coder-1.3b-instruct`
-- **SFT Model Checkpoint**: `deepseek-ai/deepseek-coder-1.3b-instruct`
-- **Workarounds**: `torchao-0.10.0` uninstalled successfully (`Found existing installation: torchao 0.10.0`).
-- **APPS Benchmark**: Downloaded APPS dataset using Parquet revision (`revision='refs/convert/parquet'`, split `train[:1000]`). Filtered 1,000 APPS problems with non-empty solutions (`Prepared 1000 APPS problems for PPO rollout.`).
+- **Base Model**: `deepseek-ai/deepseek-coder-1.3b-instruct` + SFT LoRA (`./checkpoints/sft/final`).
+- **APPS Benchmark**: `codeparrot/apps`, split `train[:1000]`, filtered to problems with non-empty solutions.
 - **Status**: `SUCCESS`
 
-### Step 3: Multi-GPU PPO Training Loop with Sandbox Execution Rewards
-- **Accelerator**: Kaggle **GPU T4 ×2**
-- **Multi-GPU Distribution Strategy**: Policy & Value models distributed across GPU 0 & GPU 1 via `device_map='auto'`.
-- **Hardware Status Log**: `Multi-GPU detected! Distributing Policy Model across GPU 0 & GPU 1 using device_map='auto'`
-- **Hyperparameters**:
-  - `num_epochs`: `1`
-  - `batch_size`: `2`
-  - `mini_batch_size`: `1`
-  - `gradient_accumulation_steps`: `2`
-  - `learning_rate`: `1e-6`
-  - `init_kl_coef`: `0.02`
-  - `target_kl`: `6.0`
-  - `max_steps`: `10`
-- **Training Rollout Log**:
-  - Step 1/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 2/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 3/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 4/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 5/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 6/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 7/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 8/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 9/10: `mean_reward=-0.200 | kl=0.000`
-  - Step 10/10: `mean_reward=-0.200 | kl=0.000`
+### Step 3: PPO Training Loop with Sandbox Execution Rewards
+- **Hyperparameters**: `batch_size=2`, `mini_batch_size=1`, `gradient_accumulation_steps=2`, `learning_rate=1e-6`, `init_kl_coef=0.05`, `target`/`target_kl=6.0`, `horizon=100`, `kl_penalty=abs`, `temperature=1.0`, `max_steps=10`.
+- **Supervisor Issue 1 — Partial / Positive Rewards (FIXED)**:
+  - Step 2 idx=0: `status=WA passed=2/8 reward=0.250`
+  - Step 3 idx=0: `status=WA passed=1/4 reward=0.250`
+  - Step 10 idx=1: `status=WA passed=1/3 reward=0.333`
+  - Full AC samples: steps 1, 2, 7 with `reward=1.000`
+  - Packed multi-test stdin now awards segment/line partial credit (`packed_tests=T`) instead of binary 0/1.
+- **Supervisor Issue 2 — KL Sign & Magnitude (FIXED)**:
+  - Step 1: `kl=0.000` (expected first step; frozen SFT ref_model + `is_peft_model=False`).
+  - Steps 2–10: `kl` in `[1.104, 2.173]`, all positive, adaptive `kl_coef` decreasing `0.0500 → 0.0482` (correct when KL < target).
+  - No high (14–19) or negative KL.
+- **Supervisor Issue 3 — `grad_norm=0` Logging (FIXED)**:
+  - Non-zero every step, e.g. step 1 `grad_norm=3.235e-01`, step 10 `grad_norm=2.354e-01`.
+  - `param_norm_delta` and `sample_lora_delta` also positive throughout.
+- **Training Rollout Log (verified)**:
+  - Step 1: `reward=0.400 | kl=0.000 | kl_coef=0.0500 | grad_norm=3.235e-01`
+  - Step 2: `reward=0.625 | kl=1.203 | kl_coef=0.0498 | grad_norm=1.605e-01`
+  - Step 3: `reward=0.025 | kl=1.125 | kl_coef=0.0496 | grad_norm=1.565e-01`
+  - Step 4: `reward=0.000 | kl=1.553 | kl_coef=0.0494 | grad_norm=2.176e-01`
+  - Step 5: `reward=-0.100 | kl=1.104 | kl_coef=0.0492 | grad_norm=2.531e-01`
+  - Step 6: `reward=-0.200 | kl=1.582 | kl_coef=0.0490 | grad_norm=2.519e-01`
+  - Step 7: `reward=0.400 | kl=1.221 | kl_coef=0.0488 | grad_norm=1.951e-01`
+  - Step 8: `reward=-0.200 | kl=1.981 | kl_coef=0.0486 | grad_norm=2.484e-01`
+  - Step 9: `reward=-0.100 | kl=2.173 | kl_coef=0.0484 | grad_norm=2.762e-01`
+  - Step 10: `reward=0.067 | kl=2.122 | kl_coef=0.0482 | grad_norm=2.354e-01`
 - **Saved Checkpoint**: `./checkpoints/ppo/final`
 - **Status**: `PPO Training completed successfully! Saved final PPO adapter checkpoint to ./checkpoints/ppo/final`
 
 ### Step 4: Checkpoint Verification & Inference Test
 - **Checkpoint Directory**: `./checkpoints/ppo/final`
-- **Artifacts & File Sizes**:
-  - `chat_template.jinja`: `0.00 MB`
-  - `config.json`: `0.00 MB`
-  - `generation_config.json`: `0.00 MB`
-  - `model.safetensors`: `2568.22 MB`
-  - `tokenizer.json`: `2.18 MB`
-  - `tokenizer_config.json`: `0.00 MB`
-- **PPO Model Configuration Verification**:
-  - `model_type`: `llama`
-  - `hidden_size`: `2048`
-  - `vocab_size`: `32256`
-- **Model Reload**:
-  - `LlamaForCausalLM` reloaded successfully from `./checkpoints/ppo/final` (`Reloaded PPO model successfully!`).
-- **APPS Inference Generation**:
-  - Generated candidate solutions for 3 APPS problem prompts (`Polycarp binary words`, `Mikhail Cartesian plane`, `Three sequences`).
-- **Verification Status**: **Checkpoint verification completed successfully: checkpoint files, model configuration, model reload, and inference generation verified.**
+- **Artifacts**: `adapter_config.json`, `adapter_model.safetensors`, `ppo_metadata.json`, tokenizer files.
+- **Model Reload**: `PeftModel.from_pretrained(..., "./checkpoints/ppo/final")` loads cleanly.
+- **Verification Status**: **PASSED — all three supervisor-flagged PPO issues fixed and verified against real Kaggle run logs.**
 
 ### Execution Evidence
 - **Link**: [executed Kaggle Notebook 5](https://www.kaggle.com/code/rajdeepbhowmick/notebook5)
@@ -371,7 +357,7 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 ---
 
 ## Notebook 05 (Corrected): PPO Training Smoke Test Verification
-**Date**: 2026-09-18
+**Date**: 2026-09-18 (superseded — `grad_norm=0` logs below were from pre-fix runs; see verified 2026-09-24 section)
 
 ### Step 1: Environment & SFT Checkpoint Resolution
 - **Git Commit**: `junior-A` branch
@@ -391,7 +377,7 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - `reward`: `-0.200`
   - `kl`: `0.000`
   - `param_norm_delta`: `4.458646e-05`
-  - `grad_norm`: `0.000000e+00`
+  - `grad_norm`: `0.000000e+00` *(pre-fix logging bug; fixed via `opt.step` wrapper — see 2026-09-24 verified run)*
 - **Step 2 Samples**:
   - `idx=0`: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200` (Code preview: `@Valid def * /** @ApiEntityFieldInfoter ...`)
   - `idx=1`: `status=ExecutionStatus.CE`, `passed=0/1`, `reward=-0.200` (Code preview: `// break; }; ... public static uint32000000 ...`)
@@ -399,8 +385,8 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - `reward`: `-0.200`
   - `kl`: `0.050`
   - `param_norm_delta`: `5.742187e-05`
-  - `grad_norm`: `0.000000e+00`
-- **Verification Status**: **PASSED** (SFT adapter loaded, batch_size=2 verified, code extraction active, 2 PPO steps completed successfully without errors).
+  - `grad_norm`: `0.000000e+00` *(pre-fix; fixed)*
+- **Verification Status**: Pipeline smoke only — **not** a claim of correct reward/grad logging. Superseded by verified 2026-09-24 run.
 
 ---
 
@@ -471,7 +457,7 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 ---
 
 ## Notebook 05: Full 50-Step PPO Training & Checkpoint Verification
-**Date**: 2026-09-23
+**Date**: 2026-09-23 (pre-fix — negative KL / binary rewards below; superseded by 2026-09-24 verified run)
 
 ### Step 1: APPS Benchmark Dataset & Tokenizer Initialization
 - **Dataset**: `codeparrot/apps` (Revision: `refs/convert/parquet`, split `train[:1000]`)
@@ -480,12 +466,13 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **Trainable Parameters**: `3,147,777 / 1,349,619,713` (`0.2332%`)
 
 ### Step 2: Full 50-Step PPO Training Loop Execution
-- **Rollout Step Progress**:
+- **Rollout Step Progress** *(stale pre-fix logs — do not cite as current results)*:
   - `PPO step 1/50`: `reward=-0.100 | kl=0.000 | sample_lora_delta=6.936596e-04`
   - `PPO step 10/50`: `reward=-0.200 | kl=-0.282 | sample_lora_delta=3.001042e-04`
   - `PPO step 25/50`: `reward=-0.100 | kl=-0.845 | sample_lora_delta=3.061019e-04`
   - `PPO step 35/50`: `reward=-0.100 | kl=-1.193 | sample_lora_delta=2.828597e-04`
   - `PPO step 50/50`: `reward=-0.200 | kl=-1.861 | sample_lora_delta=3.073641e-04`
+- **Known issues in this run** (fixed on `junior-A`): negative KL from wrong ref (`disable_adapter`/base vs SFT), binary rewards from empty/stale training set + single packed I/O case.
 - **Execution Status Distribution**: Active sandbox execution across `CE`, `WA`, `RE`, and `TLE` outcomes.
 - **LoRA Parameter Updates**: Continuous parameter updates verified across all 50 steps (`sample_lora_delta ~ 3.07e-4 to 6.93e-4`).
 
@@ -493,7 +480,7 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **Saved Checkpoint Directory**: `./checkpoints/ppo/final`
 - **Saved Artifacts**: `adapter_config.json`, `adapter_model.safetensors`, `ppo_metadata.json`, `tokenizer.json`
 - **Model Reload Test**: `PeftModel.from_pretrained(base_model, "./checkpoints/ppo/final")` loaded cleanly.
-- **Verification Status**: **PASSED (100% Verified)**
+- **Verification Status**: Checkpoint files verified only — **training metrics in this section are stale and must not be reported as final.**
 
 
 
