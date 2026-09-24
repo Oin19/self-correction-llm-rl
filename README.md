@@ -64,4 +64,5 @@ checkpoints/  Checkpoint instructions; model weights are not committed
 Pipeline validation is in progress.
 
 - **PPO training fixes verified (2026-09-24)**: dense partial rewards on packed APPS multi-test suites, healthy positive KL against a frozen SFT reference, and non-zero `grad_norm` logging. See `docs/experiment_status.md` and `outputs.md` (NB05 verified section).
-- **Next**: Notebook 07 four-variant evaluation (Zero-Shot / SFT / DPO / PPO); quantitative research claims only after controlled, reproducible runs.
+- **Paper-run wiring ready (2026-09-24)**: `reward_mode` dense/binary, separate `ppo_dense` / `ppo_binary` checkpoints with seed + commit metadata, DPO on `normalize_tests`, NB05/NB06/NB07 updated for five-arm eval. Tests: 56 pass.
+- **Next**: Kaggle paper runs — PPO-dense `max_steps≥100`, PPO-binary (same HPs/seed), DPO retrain on `train[:500]`, then full NB07 evaluation (Zero-Shot / SFT / PPO-dense / PPO-binary / DPO on HumanEval 164 + MBPP 500).

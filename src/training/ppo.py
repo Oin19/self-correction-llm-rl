@@ -4,10 +4,14 @@ import torch
 from peft import PeftModel
 from src.execution.executor import PythonSandbox
 from src.models.generation import extract_code_block
-from src.rewards.execution_reward import compute_partial_reward
+from src.rewards.execution_reward import score_rollout_reward
+from src.utils.repro import git_commit_sha, set_global_seed
 from src.utils.test_cases import normalize_tests
 from trl import PPOTrainer, PPOConfig
 from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
+
+_git_commit_sha = git_commit_sha
+REWARD_MODES = ("dense", "binary")
 
 def load_sft_adapter(path,device_map,trainable=True):
     cfg_path=os.path.join(path,"adapter_config.json")
@@ -40,7 +44,13 @@ def _gradient_norm(parameters):
             total_sq += float(p.grad.detach().float().pow(2).sum().item())
     return (total_sq ** 0.5) if found else 0.0
 
-def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/ppo",num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.05,target_kl=6.0,max_steps=10):
+def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir=None,num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.05,target_kl=6.0,max_steps=10,reward_mode="dense",seed=42,commit_sha=None):
+    if reward_mode not in REWARD_MODES:
+        raise ValueError(f"reward_mode must be one of {REWARD_MODES}, got {reward_mode!r}")
+    if output_dir is None:
+        output_dir = f"./checkpoints/ppo_{reward_mode}"
+    set_global_seed(seed)
+    print(f"PPO seed={seed} reward_mode={reward_mode} output_dir={output_dir} commit={commit_sha or _git_commit_sha() or 'unknown'}", flush=True)
     tokenizer.padding_side="left"
     if tokenizer.pad_token is None: tokenizer.pad_token=tokenizer.eos_token
     # Keep only examples with executable tests. Use select() (not Dataset.filter) so a
@@ -190,7 +200,7 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
             raw_response=tokenizer.decode(response,skip_special_tokens=True)
             code=extract_code_block(raw_response)
             result=sandbox.run_tests(code,tests).to_dict()
-            reward=compute_partial_reward(result)
+            reward=score_rollout_reward(result, reward_mode=reward_mode)
             rewards.append(torch.tensor(reward,dtype=torch.float32))
             print(
                 f"PPO sample step={step} idx={sample_idx}: "
@@ -236,6 +246,26 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir="./checkpoints/
     else:
         model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
+    reward_type = (
+        "execution_dense_partial_test_fraction"
+        if reward_mode == "dense"
+        else "execution_binary_ac_only"
+    )
     with open(os.path.join(final_dir, "ppo_metadata.json"), "w", encoding="utf-8") as f:
-        json.dump({"base_model": base, "checkpoint_type": "ppo_policy_adapter", "reward_type": "execution_dense_partial_test_fraction", "execution_tests_required": True, "trainable_parameters": trainable_count, "total_parameters": total_count}, f, indent=2)
+        json.dump({
+            "base_model": base,
+            "checkpoint_type": "ppo_policy_adapter",
+            "reward_mode": reward_mode,
+            "reward_type": reward_type,
+            "execution_tests_required": True,
+            "seed": seed,
+            "commit_sha": commit_sha or _git_commit_sha(),
+            "max_steps": max_steps,
+            "learning_rate": learning_rate,
+            "init_kl_coef": init_kl_coef,
+            "target_kl": target_kl,
+            "batch_size": batch_size,
+            "trainable_parameters": trainable_count,
+            "total_parameters": total_count,
+        }, f, indent=2)
     return trainer

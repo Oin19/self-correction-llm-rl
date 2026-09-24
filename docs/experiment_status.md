@@ -16,11 +16,15 @@ The September 2026 notebook runs are preserved as execution evidence, but the nu
 8. Final comparisons must use the same fixed evaluation set, decoding settings, and evaluation code for all available variants.
 9. Packed APPS multi-test stdin suites must be scored with segment/line partial credit (`packed_tests=T`), not binary 0/1.
 10. PPO must use a frozen SFT `ref_model` (`is_peft_model=False`, `kl_penalty=abs`, `horizon=100`) so KL is measured against the SFT policy, not the base model.
+11. Paper PPO runs must set `reward_mode` (`dense` for RQ3, `binary` for RQ4), fixed `seed`, and write to separate dirs `./checkpoints/ppo_dense` / `./checkpoints/ppo_binary` with `ppo_metadata.json` recording mode, seed, and commit SHA.
+12. DPO preference collection must use the same `normalize_tests` harness as PPO/eval (not the old monolithic `parse_apps_test_cases` path). Paper DPO uses `train[:500]+` with seed 42.
+13. Final evaluation must cover five arms: Zero-Shot, SFT, PPO-dense, PPO-binary, DPO on full HumanEval (164) + MBPP (500) with identical seed/decoding/tests.
 
 ## Corrected notebooks
 
-- `notebooks/05_ppo_training_corrected.ipynb`: small PPO smoke test using the repository implementation and explicit benchmark rewards.
-- `notebooks/07_evaluation_and_ablations_corrected.ipynb`: evaluation with explicit checkpoint handling and recorded sample counts.
+- `notebooks/05_ppo_training_corrected.ipynb`: PPO with `REWARD_MODE` dense/binary, separate checkpoint dirs, seed 42, `MAX_STEPS=100` paper default (10 = smoke).
+- `notebooks/06_dpo_training.ipynb`: fresh `junior-A` clone, `normalize_tests` harness, `train[:500]` preference split, seed logged.
+- `notebooks/07_evaluation_and_ablations_corrected.ipynb`: five-arm eval (Zero-Shot / SFT / PPO-dense / PPO-binary / DPO), full-set by default, fixed seed.
 
 ## PPO validation
 
@@ -32,7 +36,20 @@ The September 2026 notebook runs are preserved as execution evidence, but the nu
     2. **KL sign/magnitude**: step 1 `kl=0.000`, steps 2–10 `kl` in `[1.10, 2.17]`, all positive; adaptive `kl_coef` decays `0.0500→0.0482` (correct when KL < target).
     3. **`grad_norm` logging**: non-zero every step (`0.16–0.32`); `param_norm_delta` and `sample_lora_delta` positive throughout.
   - Full step-by-step metrics: see `outputs.md` → “Notebook 05: Reinforcement Learning: PPO Training” (2026-09-24 verified section).
-  - Test suite: **49 tests pass** locally (`python -m unittest discover -s tests`).
+  - Test suite: **56 tests pass** locally (`python -m unittest discover -s tests`).
+  - Note: that diagnostic used the legacy `./checkpoints/ppo` dir. Paper arms write to `ppo_dense` / `ppo_binary` with `reward_mode` + seed in metadata.
+
+## Paper-run readiness (2026-09-24)
+
+| Component | Ready? | Notes |
+|---|---|---|
+| Dense reward + packed partial credit | Yes | `score_rollout_reward(..., "dense")` |
+| Binary AC-only reward | Yes | `score_rollout_reward(..., "binary")` |
+| Dual checkpoints + metadata | Yes | `ppo_dense` / `ppo_binary`, seed + commit in JSON |
+| DPO harness = PPO harness | Yes | `parse_apps_test_cases` → `normalize_tests` |
+| NB05 / NB06 / NB07 wiring | Yes | Flip `REWARD_MODE`, full eval arms |
+| Paper training runs | **No** | Still need Kaggle: dense 100+, binary 100+, DPO retrain |
+| Full 5-arm eval | **No** | After training checkpoints exist |
 
 ## Reporting rule
 

@@ -19,15 +19,23 @@ Track at minimum:
 
 ## Reward Variants
 
-- Binary final execution reward (RQ4 ablation only)
-- Partial test-pass reward (default dense RL reward)
+Selected at train time via `reward_mode` on `run_ppo_training(...)`:
+
+- **`reward_mode="dense"`** (default; RQ3) — partial test-pass reward
   - AC → `+1.0`
   - Non-AC with `passed > 0` → `passed / total` (never discarded)
   - WA/PE with `0` passed → `0.0`
   - CE/RE/TLE/MLE (or empty suite) with `0` passed → `−0.2`
-  - Packed APPS multi-test stdin (`first line = T`): scored by segment/line partial credit via `score_io_output` / `packed_tests=T` so a single packed case can still yield `k/n` with `n > 1`
-- Execution-status-aware reward
-- Invalid/syntax output penalty
+  - Packed APPS multi-test stdin (`first line = T`): segment/line partial credit via `score_io_output` / `packed_tests=T`
+- **`reward_mode="binary"`** (RQ4 ablation only)
+  - AC → `+1.0`
+  - Any non-AC → `0.0` (no partial credit, no CE/RE penalty)
+- Execution-status-aware reward (exploratory)
+- Invalid/syntax output penalty (exploratory)
+
+Both modes share the same sandbox tests (`normalize_tests`) so only the reward mapping differs between RQ3 and RQ4 arms. Checkpoints: `./checkpoints/ppo_dense/final` vs `./checkpoints/ppo_binary/final`; `ppo_metadata.json` records `reward_mode`, `seed`, and `commit_sha`.
+
+DPO preference pairs are collected with the **same** `normalize_tests` harness (chosen = first AC turn; rejected = first CE/RE/WA/TLE/MLE turn within K=3).
 
 ## Baselines
 

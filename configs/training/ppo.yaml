@@ -1,4 +1,11 @@
-learning_rate: 0.0000005
-kl_beta: 0.02
+learning_rate: 0.000001
+init_kl_coef: 0.05
+target_kl: 6.0
 max_grad_norm: 1.0
+reward_mode: dense
+seed: 42
+max_steps: 100
+batch_size: 2
+mini_batch_size: 1
+gradient_accumulation_steps: 2
 checkpoint_interval_minutes: 30

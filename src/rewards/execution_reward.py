@@ -26,6 +26,21 @@ def compute_reward_binary(status: str, tests_passed: int = 0, total_tests: int =
     return 1.0 if status == "AC" else 0.0
 
 
+def score_rollout_reward(
+    result: Union[ExecutionResult, Dict[str, Any]],
+    reward_mode: str = "dense",
+    success_reward: float = 1.0,
+    penalty: float = -0.2,
+) -> float:
+    """Score one rollout under dense (partial) or binary (AC-only) reward mode."""
+    if reward_mode == "binary":
+        status = result.status if isinstance(result, ExecutionResult) else result.get("status", "")
+        return success_reward if status == ExecutionStatus.AC else 0.0
+    if reward_mode == "dense":
+        return compute_partial_reward(result, success_reward=success_reward, penalty=penalty)
+    raise ValueError(f"Unknown reward_mode={reward_mode!r}; expected 'dense' or 'binary'")
+
+
 def compute_binary_reward(
     result: Union[ExecutionResult, Dict[str, Any]],
     success_reward: float = 1.0,

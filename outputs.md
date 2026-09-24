@@ -233,8 +233,9 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
   - Step 8: `reward=-0.200 | kl=1.981 | kl_coef=0.0486 | grad_norm=2.484e-01`
   - Step 9: `reward=-0.100 | kl=2.173 | kl_coef=0.0484 | grad_norm=2.762e-01`
   - Step 10: `reward=0.067 | kl=2.122 | kl_coef=0.0482 | grad_norm=2.354e-01`
-- **Saved Checkpoint**: `./checkpoints/ppo/final`
+- **Saved Checkpoint**: `./checkpoints/ppo/final` (legacy diagnostic path; paper arms use `./checkpoints/ppo_dense/final` and `./checkpoints/ppo_binary/final` via `reward_mode`)
 - **Status**: `PPO Training completed successfully! Saved final PPO adapter checkpoint to ./checkpoints/ppo/final`
+- **Paper-run note (2026-09-24)**: NB05 now exposes `REWARD_MODE` (`dense`|`binary`), `MAX_STEPS` (paper default 100), `SEED=42`, and dual checkpoint dirs with `ppo_metadata.json` (`reward_mode`, `seed`, `commit_sha`). This 10-step run remains diagnostic only.
 
 ### Step 4: Checkpoint Verification & Inference Test
 - **Checkpoint Directory**: `./checkpoints/ppo/final`

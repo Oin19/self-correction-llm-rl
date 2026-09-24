@@ -1,60 +1,35 @@
 """DPO training entry points."""
 
 import json
-from datasets import Dataset
+from typing import TYPE_CHECKING, List
 
 from src.debugging.debug_loop import agentic_debug_loop
+from src.utils.repro import git_commit_sha, set_global_seed
+from src.utils.test_cases import normalize_tests
+
+if TYPE_CHECKING:
+    from datasets import Dataset
 
 
 def parse_apps_test_cases(prob: dict) -> list:
-    """Extract test case verification code from APPS dataset item (input_output field)."""
-    test_cases = prob.get("test_cases", [])
-    if test_cases:
-        return test_cases if isinstance(test_cases, list) else [str(test_cases)]
-
-    io_data = prob.get("input_output", None)
-    if not io_data:
-        return []
-
-    if isinstance(io_data, str):
-        try:
-            io_data = json.loads(io_data)
-        except Exception:
-            return []
-
-    if not isinstance(io_data, dict):
-        return []
-
-    inputs = io_data.get("inputs", [])
-    outputs = io_data.get("outputs", [])
-    fn_name = io_data.get("fn_name", None)
-
-    if not inputs or not outputs:
-        return []
-
-    test_code_snippets = []
-    if fn_name:
-        for inp, outp in zip(inputs, outputs):
-            test_code_snippets.append(f"assert {fn_name}(*{repr(inp)}) == {repr(outp)}")
-    else:
-        for inp, outp in zip(inputs, outputs):
-            inp_str = "\n".join(inp) if isinstance(inp, list) else str(inp)
-            outp_str = "\n".join(outp) if isinstance(outp, list) else str(outp)
-            test_code_snippets.append({"input": inp_str, "output": outp_str})
+    """Extract executor-ready tests via the same normalizer PPO/eval use."""
+    return normalize_tests(prob)
 
 
-    return test_code_snippets
-
-
-def make_preference_pairs(problems, model, tokenizer, K: int = 3) -> Dataset:
+def make_preference_pairs(problems, model, tokenizer, K: int = 3, seed: int = 42):
     """Collect (chosen, rejected) preference pairs from execution debug loop rollouts."""
+    from datasets import Dataset
+
+    set_global_seed(seed)
     pairs = []
     total = len(problems)
-    print(f"Starting DPO preference pair generation across {total} APPS problems...", flush=True)
+    print(f"Starting DPO preference pair generation across {total} APPS problems (seed={seed})...", flush=True)
 
     for idx, prob in enumerate(problems):
         question = prob.get("question", prob.get("prompt", ""))
         test_cases = parse_apps_test_cases(prob)
+        if not test_cases:
+            continue
         history = agentic_debug_loop(model, tokenizer, question, test_cases, K=K)
 
         ac_turns = [h for h in history if h["result"]["status"] == "AC"]
@@ -78,18 +53,23 @@ def make_preference_pairs(problems, model, tokenizer, K: int = 3) -> Dataset:
 def run_dpo_training(
     model,
     tokenizer,
-    preference_data: Dataset,
+    preference_data,
     output_dir: str = "./checkpoints/dpo",
     beta: float = 0.1,
     learning_rate: float = 5e-5,
     num_train_epochs: int = 3,
     per_device_train_batch_size: int = 4,
+    seed: int = 42,
+    commit_sha: str = "",
 ):
     """Run Direct Preference Optimization (DPO) training."""
     try:
         from trl import DPOConfig, DPOTrainer
     except ImportError as e:
         raise ImportError(f"TRL library is required for DPO training. Install with `pip install trl`: {e}")
+
+    set_global_seed(seed)
+    print(f"DPO seed={seed} commit={commit_sha or git_commit_sha() or 'unknown'}", flush=True)
 
     try:
         dpo_config = DPOConfig(
@@ -147,5 +127,12 @@ def run_dpo_training(
             "checkpoint_type": "dpo_execution_grounded",
             "preference_source": "model_generated_execution_rollouts",
             "reference_solution_fallback": False,
+            "test_harness": "normalize_tests",
+            "seed": seed,
+            "commit_sha": commit_sha or git_commit_sha(),
+            "beta": beta,
+            "learning_rate": learning_rate,
+            "num_train_epochs": num_train_epochs,
+            "num_preference_pairs": len(preference_data),
         }, f, indent=2)
     return dpo_trainer
