@@ -1,6 +1,6 @@
-learning_rate: 0.000001
-init_kl_coef: 0.05
-target_kl: 6.0
+learning_rate: 0.0000002
+init_kl_coef: 0.30
+target_kl: 4.0
 max_grad_norm: 1.0
 reward_mode: dense
 seed: 42

@@ -44,7 +44,7 @@ def _gradient_norm(parameters):
             total_sq += float(p.grad.detach().float().pow(2).sum().item())
     return (total_sq ** 0.5) if found else 0.0
 
-def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir=None,num_epochs=1,learning_rate=1e-6,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.05,target_kl=6.0,max_steps=10,reward_mode="dense",seed=42,commit_sha=None):
+def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir=None,num_epochs=1,learning_rate=2e-7,batch_size=2,mini_batch_size=1,gradient_accumulation_steps=2,init_kl_coef=0.30,target_kl=4.0,max_steps=100,reward_mode="dense",seed=42,commit_sha=None):
     if reward_mode not in REWARD_MODES:
         raise ValueError(f"reward_mode must be one of {REWARD_MODES}, got {reward_mode!r}")
     if output_dir is None:
