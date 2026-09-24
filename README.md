@@ -61,4 +61,7 @@ checkpoints/  Checkpoint instructions; model weights are not committed
 
 ## Status
 
-Pipeline validation is currently in progress. Quantitative research claims will be added only after controlled experiments are completed.
+Pipeline validation is in progress.
+
+- **PPO training fixes verified (2026-09-24)**: dense partial rewards on packed APPS multi-test suites, healthy positive KL against a frozen SFT reference, and non-zero `grad_norm` logging. See `docs/experiment_status.md` and `outputs.md` (NB05 verified section).
+- **Next**: Notebook 07 four-variant evaluation (Zero-Shot / SFT / DPO / PPO); quantitative research claims only after controlled, reproducible runs.

@@ -19,8 +19,13 @@ Track at minimum:
 
 ## Reward Variants
 
-- Binary final execution reward
-- Partial test-pass reward
+- Binary final execution reward (RQ4 ablation only)
+- Partial test-pass reward (default dense RL reward)
+  - AC → `+1.0`
+  - Non-AC with `passed > 0` → `passed / total` (never discarded)
+  - WA/PE with `0` passed → `0.0`
+  - CE/RE/TLE/MLE (or empty suite) with `0` passed → `−0.2`
+  - Packed APPS multi-test stdin (`first line = T`): scored by segment/line partial credit via `score_io_output` / `packed_tests=T` so a single packed case can still yield `k/n` with `n > 1`
 - Execution-status-aware reward
 - Invalid/syntax output penalty
 

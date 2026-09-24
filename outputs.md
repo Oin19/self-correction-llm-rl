@@ -321,6 +321,8 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 
 ### Step 2: Main Evaluation Grid — Zero-Shot Base vs SFT vs PPO vs DPO (RQ3 & RQ7)
 
+> **Status (2026-09-24)**: Tables below are **historical smoke/validation only** (N≤20, pre-fix PPO checkpoint). Do not report as paper results. Rerun Notebook 07 with the verified 2026-09-24 PPO adapter before any quantitative claim. See `docs/experiment_status.md`.
+
 | Model | K | HumanEval Pass@1 | HumanEval Fix@1 | MBPP Pass@1 | MBPP Fix@1 | HumanEval Fix@3 | MBPP Fix@3 | HumanEval Fix@5 | MBPP Fix@5 |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Zero-Shot Base** | 1 | 40.00% | 40.00% | 100.00% | 100.00% | N/A | N/A | N/A | N/A |
@@ -352,7 +354,7 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 
 ### Execution Evidence
 - **Link**: [executed Kaggle Notebook 7](https://www.kaggle.com/code/rajdeepbhowmick/notebook7)
-- **Verification Status**: **All evaluation matrix runs, metric calculations, and ablation studies completed successfully.**
+- **Verification Status**: Historical smoke run only. **Pending**: full/fixed-checkpoint rerun after verified PPO training (2026-09-24). Do not cite these percentages as final.
 
 ---
 
