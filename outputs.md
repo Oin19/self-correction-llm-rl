@@ -485,6 +485,42 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - **Model Reload Test**: `PeftModel.from_pretrained(base_model, "./checkpoints/ppo/final")` loaded cleanly.
 - **Verification Status**: Checkpoint files verified only — **training metrics in this section are stale and must not be reported as final.**
 
+---
+
+## Notebook 05: Paper PPO Arms — EXP-PPO-DENSE & EXP-PPO-BINARY
+**Date**: 2026-09-25 (Kaggle runs; `junior-A` @ `36c8055b19891eb279317d187acb5cc53e1848e5`)
+
+### Shared Run Configuration (identical except `reward_mode`)
+- **Git**: NB05 Cell 2 fresh-cloned `junior-A`; `GIT_SHA=36c8055…` captured in both runs' `ppo_metadata.json`.
+- **Hyperparameters**: `batch_size=2`, `mini_batch_size=1`, `gradient_accumulation_steps=2`, `learning_rate=2e-7`, `init_kl_coef=0.30`, `target_kl=4.0`, `max_steps=100`, `seed=42`, `kl_penalty=abs`, frozen SFT `ref_model`.
+- **Trainable Parameters**: `3,147,777 / 1,349,619,713` (`0.2332%`). **GPU**: Kaggle T4.
+- **Dataset**: `codeparrot/apps` `train[:1000]`, tests non-empty.
+
+### EXP-PPO-DENSE (`REWARD_MODE=dense`) — 100/100 steps
+- **Mean step reward**: `0.039` (sum `3.888` over 100 steps; range `−0.200 … 1.000`); positive on `33/100` steps; **AC `21/200` rollouts (`10.5%`)**.
+- **KL trajectory**: step 1 `0.000`; max `4.822` @ step 99 (`1.21×` target 4.0); mean `2.53`; final `4.201` — bounded throughout.
+- **kl_coef**: `0.3000 → 0.2223` (min `0.2200` @ step 95; upticks when KL > target — adaptive controller behaving correctly).
+- **grad_norm**: `0.191–0.692`, non-zero every step; `param_norm_delta` / `sample_lora_delta` positive throughout.
+- **Stability**: mean reward first-10 steps `0.089` → last-10 steps `0.085` (no collapse, no blow-up).
+- **Checkpoint**: `./checkpoints/ppo_dense/final` + `ppo_metadata.json` **verified** (`reward_mode=dense`, `seed=42`, `commit_sha=36c8055…`, `learning_rate=2e-7`, `init_kl_coef=0.3`, `target_kl=4`, `batch_size=2`).
+
+### EXP-PPO-BINARY (`REWARD_MODE=binary`) — 100/100 steps
+- **Mean step reward**: `0.115` (sum `11.500` over 100 steps; range `0.000 … 1.000`); positive on `22/100` steps; **AC `23/200` rollouts (`11.5%`)**.
+- **Reward semantics**: sample rewards strictly `0.0` / `1.0` — partial passes (e.g. `passed=2/8`, `1/7`) correctly score `0.000`; AC is the only source of `1.000` (verified across log). Rollout status counts: WA 82, RE 71, AC 23, CE 21, TLE 2, MLE 1.
+- **KL trajectory**: step 1 `0.000`; max `4.787` @ step 97 (`1.20×` target 4.0); mean `2.534`; final `4.181` — bounded throughout, no divergence.
+- **kl_coef**: `0.3000 → 0.2247` (min `0.2216` @ step 93) — adaptive controller tracks dense arm (`→0.2223`), confirming identical HPs took effect.
+- **grad_norm**: `0.194–0.588`, non-zero every step.
+- **Wall-clock**: 41.0 min total (log timestamps); training loop 38.3 min.
+- **Checkpoint**: `./checkpoints/ppo_binary/final` + `ppo_metadata.json` **verified** (`reward_mode=binary`, `reward_type=execution_binary_ac_only`, `seed=42`, `commit_sha=36c8055…`, `target_kl=4`, `batch_size=2`).
+- **Run history**: 4th attempt was paper-eligible (attempts 1–3 used `target_kl=6` or legacy HPs and are discarded).
+
+### Verification
+- **Arm comparison**: dense AC `21/200` (`10.5%`) vs binary AC `23/200` (`11.5%`) — comparable solve rates; binary rewards strictly `{0,1}` (mean step reward `0.115` not comparable to dense `0.039`, different reward scales, no negative rewards). Both arms KL-bounded (dense max `4.822` @99, binary max `4.787` @97 vs target 4.0) with adaptive `kl_coef` converging to `0.222` / `0.225` — controlled comparison for RQ3/RQ4.
+- Both arms share identical HPs, seed, dataset order, and `commit_sha`; metadata differs only in `reward_mode`/`reward_type` and output dir — controlled comparison for RQ3/RQ4.
+- Follow-up HP-sync commit `ec73c45` aligns repo defaults (`src/training/ppo.py`, `configs/training/ppo.yaml`, NB05 cells) with these run HPs; both runs' provenance remains `36c8055`.
+- Test suite: **56 tests pass** locally.
+- **Status**: **Both paper arms completed and metadata-verified (2026-09-25).** Next: NB06 DPO retrain → NB07 5-arm eval.
+
 
 
 

@@ -44,7 +44,7 @@ Do not report a result without enough metadata to reproduce the run.
 
 **Status**: Validation / diagnostic run — not a final paper training run. Superseded for RQ3/RQ4 claims by the paper-scale arms below.
 
-### EXP-PPO-DENSE (Planned — Paper RQ3 Dense Arm)
+### EXP-PPO-DENSE (Completed — Paper RQ3 Dense Arm)
 
 | Field | Value |
 |---|---|
@@ -52,20 +52,21 @@ Do not report a result without enough metadata to reproduce the run.
 | Research Question | RQ3 (does RL with dense partial execution reward beat SFT / zero-shot?) |
 | Model + checkpoint | `deepseek-ai/deepseek-coder-1.3b-instruct` + SFT LoRA → `./checkpoints/ppo_dense/final` |
 | Dataset + split | `codeparrot/apps` `train[:1000]`, tests non-empty |
-| Method | PPO, `reward_mode=dense`, frozen SFT ref, `kl_penalty=abs` |
+| Method | PPO, `reward_mode=dense`, frozen SFT ref, `kl_penalty=abs`; LoRA trainable `3,147,777 / 1,349,619,713` (`0.2332%`) |
 | Debugging turns K | N/A (single-turn rollout) |
-| Sampling settings | `temperature=1.0`, `top_p=0.95`, `max_new_tokens=384` |
+| Sampling settings | `temperature=1.0`, `top_p=0.95`, `max_new_tokens=384`, prompt truncation 350 |
 | Feedback type | Sandbox execution (partial packed-suite credit) |
 | Reward version | Dense partial: AC→1.0; `passed/total`; WA/PE 0→0.0; CE/RE/TLE/MLE 0→−0.2 |
 | Seed | `42` (logged in `ppo_metadata.json`) |
+| Hyperparameters | `batch_size=2`, `mini_batch_size=1`, `gradient_accumulation_steps=2`, `learning_rate=2e-7`, `init_kl_coef=0.30`, `target_kl=4.0`, `max_steps=100` |
 | GPU / VRAM | Kaggle T4 |
-| Wall-clock time | TBD (target `max_steps≥100`) |
-| Metrics | TBD |
-| Notes / anomalies | Run NB05 with `REWARD_MODE="dense"`, `MAX_STEPS=100`. Requires push to `junior-A` before Kaggle Cell 2 clone. |
+| Wall-clock time | Not captured in run log (100 steps × 2 rollouts, Kaggle session) |
+| Metrics | 100/100 steps. Mean step reward `0.039` (sum `3.888`, range `−0.200…1.000`), positive on `33/100` steps; AC `21/200` rollouts (`10.5%`). KL: `0 → 4.822` max @ step 99 (`1.21×` target 4.0), mean `2.53`, final `4.201` — bounded. `kl_coef` `0.3000 → 0.2223` (min `0.2200` @ step 95, upticks when KL > target). `grad_norm` `0.191–0.692`, non-zero every step. Mean reward first-10 `0.089` → last-10 `0.085` (stable). |
+| Notes / anomalies | Run 2026-09-25 on Kaggle; Cell 2 cloned `junior-A`, metadata verified: `reward_mode=dense`, `seed=42`, `commit_sha=36c8055…`, `learning_rate=2e-7`, `init_kl_coef=0.3`, `target_kl=4`, `batch_size=2`. Empty/truncated rollouts on hard APPS persist (1.3B model quality, not a bug). |
 
-**Status**: Planned.
+**Status**: Completed 2026-09-25 — paper-ready RQ3 arm (metadata verified).
 
-### EXP-PPO-BINARY (Planned — Paper RQ4 Binary Arm)
+### EXP-PPO-BINARY (Completed — Paper RQ4 Binary Arm)
 
 | Field | Value |
 |---|---|
@@ -73,18 +74,19 @@ Do not report a result without enough metadata to reproduce the run.
 | Research Question | RQ4 (does binary AC-only reward match dense partial credit?) |
 | Model + checkpoint | `deepseek-ai/deepseek-coder-1.3b-instruct` + SFT LoRA → `./checkpoints/ppo_binary/final` |
 | Dataset + split | Same as `EXP-PPO-DENSE` (`train[:1000]`, same order/seed) |
-| Method | PPO, `reward_mode=binary`, frozen SFT ref, same HPs/seed as dense arm |
+| Method | PPO, `reward_mode=binary`, frozen SFT ref, **identical HPs/seed to dense arm** (only `reward_mode` differs) |
 | Debugging turns K | N/A |
 | Sampling settings | Same as dense arm |
 | Feedback type | Sandbox execution |
-| Reward version | Binary: AC→1.0; all non-AC→0.0 |
+| Reward version | Binary: AC→1.0; all non-AC→0.0 (sample rewards strictly ∈ {0.0, 1.0}) |
 | Seed | `42` |
+| Hyperparameters | Same as dense: `batch_size=2`, `mini_batch_size=1`, `gradient_accumulation_steps=2`, `learning_rate=2e-7`, `init_kl_coef=0.30`, `target_kl=4.0`, `max_steps=100` |
 | GPU / VRAM | Kaggle T4 |
-| Wall-clock time | TBD |
-| Metrics | TBD |
-| Notes / anomalies | Only difference from dense arm is `reward_mode` + output dir. |
+| Wall-clock time | 41.0 min total (log timestamps); training loop 149.7s → 2449.0s = 38.3 min |
+| Metrics | 100/100 steps. Mean step reward `0.115` (sum `11.500`, range `0.000…1.000`), positive on `22/100` steps; **AC `23/200` rollouts (`11.5%`)**. Sample rewards strictly `0.0`/`1.0` — partial passes (e.g. `passed=2/8`, `1/7`) correctly score `0.000`. Rollout status: WA 82, RE 71, AC 23, CE 21, TLE 2, MLE 1. KL: max `4.787` @ step 97 (`1.20×` target 4.0), mean `2.534`, final `4.181` — bounded, no divergence. `kl_coef` `0.3000 → 0.2247` (min `0.2216` @ step 93; dense arm `→0.2223`). `grad_norm` `0.194–0.588`, non-zero every step. |
+| Notes / anomalies | Run 2026-09-25 on Kaggle (4th attempt; earlier attempts had `target_kl=6` or old HPs). Metadata verified: `reward_mode=binary`, `reward_type=execution_binary_ac_only`, `seed=42`, `commit_sha=36c8055…`, `target_kl=4` — only `reward_mode`/`reward_type` differ from dense metadata. |
 
-**Status**: Planned.
+**Status**: Completed 2026-09-25 — paper-ready RQ4 arm (metadata verified).
 
 ### EXP-DPO-RETRAIN (Planned — Paper RQ5)
 

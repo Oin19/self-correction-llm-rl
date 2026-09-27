@@ -48,8 +48,8 @@ The September 2026 notebook runs are preserved as execution evidence, but the nu
 | Dual checkpoints + metadata | Yes | `ppo_dense` / `ppo_binary`, seed + commit in JSON |
 | DPO harness = PPO harness | Yes | `parse_apps_test_cases` → `normalize_tests` |
 | NB05 / NB06 / NB07 wiring | Yes | Flip `REWARD_MODE`, full eval arms |
-| Paper training runs | **No** | Still need Kaggle: dense 100+, binary 100+, DPO retrain |
-| Full 5-arm eval | **No** | After training checkpoints exist |
+| Paper training runs | **Partial** | Dense ✅ + binary ✅ (2026-09-25, 100 steps each, `36c8055`, metadata verified); DPO retrain still pending |
+| Full 5-arm eval | **No** | After DPO checkpoint exists |
 
 ## Reporting rule
 

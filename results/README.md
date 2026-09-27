@@ -17,8 +17,8 @@ Final paper-ready tables and figures should be copied here only when they are re
 | Experiment | Status | Where |
 |---|---|---|
 | `EXP-PPO-2026-09-24` (verified PPO training) | Validation PASSED — supervisor issues fixed | `docs/experiments.md`, `outputs.md` NB05 2026-09-24 |
-| `EXP-PPO-DENSE` (RQ3 paper arm) | **Planned** — NB05 `REWARD_MODE=dense`, `MAX_STEPS≥100` | `docs/experiments.md` |
-| `EXP-PPO-BINARY` (RQ4 paper arm) | **Planned** — NB05 `REWARD_MODE=binary`, same HPs/seed | `docs/experiments.md` |
+| `EXP-PPO-DENSE` (RQ3 paper arm) | **Completed 2026-09-25** — 100/100 steps, KL max 4.82, AC 10.5%, ckpt `ppo_dense/final` | `docs/experiments.md`, `outputs.md` NB05 paper arms |
+| `EXP-PPO-BINARY` (RQ4 paper arm) | **Completed 2026-09-25** — 100/100 steps, AC 23/200 (11.5%), KL max 4.79, ckpt `ppo_binary/final` | `docs/experiments.md`, `outputs.md` NB05 paper arms |
 | `EXP-DPO-RETRAIN` (RQ5) | **Planned** — NB06 `train[:500]`, `normalize_tests` | `docs/experiments.md` |
 | `EXP-EVAL-RQ3RQ4` (5-arm full eval) | **Pending** all training checkpoints | NB07 corrected; do not use historical NB07 tables |
 
