@@ -29,8 +29,13 @@ def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = Non
     return sandbox.run_tests(code, test_cases)
 
 
-def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, K: int = 3, initial_code: str = None) -> list:
-    """Run up to K turns; every retry receives real execution feedback."""
+def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, K: int = 3,
+                       initial_code: str = None, max_gen_time: Optional[float] = None) -> list:
+    """Run up to K turns; every retry receives real execution feedback.
+
+    ``max_gen_time`` (seconds) caps each ``model.generate`` call (wall clock)
+    so a wedged GPU/driver cannot hang the loop indefinitely.
+    """
     history, code, error = [], initial_code, ""
     device = next(model.parameters()).device
     tests, sandbox = test_cases or [], PythonSandbox()
@@ -47,6 +52,8 @@ def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, 
             }
             if turn > 0:
                 gen_kwargs.update({"temperature": 1.0, "top_p": 0.95})
+            if max_gen_time:
+                gen_kwargs["max_time"] = max_gen_time
             with torch.no_grad():
                 output = model.generate(**inputs, **gen_kwargs)
             full = tokenizer.decode(output[0], skip_special_tokens=True)
