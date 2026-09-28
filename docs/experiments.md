@@ -100,7 +100,7 @@ Do not report a result without enough metadata to reproduce the run.
 | Seed | `42` |
 | Notes / anomalies | Supersedes NB06 2026-09-15 (100 pairs, pre-fix harness). |
 
-**Status**: Planned.
+**Status**: Checkpoint exists — lead-approved NB06 run executed with the legacy harness on `train[:100]`, initialized from the **base model** (SFT-adapter search fell back). Evaluated in NB07 (2026-09-28). Caveats recorded in `outputs.md` NB07; the `train[:500]` + `normalize_tests` plan above remains the intended paper configuration if a retrain is ever approved (lead: no more training).
 
 ### EXP-EVAL-RQ3RQ4 (Planned — Full 5-Arm Evaluation)
 
@@ -114,4 +114,4 @@ Do not report a result without enough metadata to reproduce the run.
 | Metrics | Pass@1, Fix@3, Fix@5 per arm/benchmark |
 | Notes / anomalies | Do not cite historical NB07 smoke tables. Requires all trained checkpoints present. |
 
-**Status**: Planned (after paper training runs).
+**Status**: Smoke N=20 ✅ + large N=100 ✅ (2026-09-28, commit `0c4da7f`, all 5 arms, Exec 100%, infra 0, CSV+JSON saved — see `outputs.md`). N=100 accepted as **proposal-basis preliminary evaluation**; FULL set (`EVAL_N=None`, 164+500) planned for the final paper.

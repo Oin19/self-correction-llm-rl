@@ -1,0 +1,60 @@
+{
+  "run_type": "actual_checkpoint_inference_and_sandbox_execution",
+  "artifact_provenance": {
+    "status": "transcription_of_original_run_output",
+    "source": "Kaggle Notebook 07 console output of the official N=100 run, 2026-09-28",
+    "reason": "original evaluation_results_corrected.json lost when the Kaggle session ended (working directory not persisted)",
+    "transcribed_on": "2026-09-28",
+    "transcription_note": "all metric values are exact (n=100, each is count/100); lost fields are null and flagged under lost_fields",
+    "lost_fields": ["timestamp_utc", "status_distributions"]
+  },
+  "eval_n": 100,
+  "max_k": 5,
+  "seed": 42,
+  "git_sha": "0c4da7f44df41c9e152eab5ff11f1aa34d942ec7",
+  "timestamp_utc": null,
+  "benchmarks": {
+    "humaneval_total": 164,
+    "mbpp_total": 500,
+    "humaneval_evaluated": 100,
+    "mbpp_evaluated": 100
+  },
+  "arms": ["Zero-Shot", "SFT", "PPO-dense", "PPO-binary", "DPO"],
+  "arms_run": ["DPO", "PPO-binary", "PPO-dense", "SFT", "Zero-Shot"],
+  "generation_settings": {
+    "problems": "first 100 of each benchmark, identical subset for all arms",
+    "tests": "extract_eval_test_cases = normalize_tests (deterministic, identical for all arms)",
+    "prompt_template": "build_prompt (src/debugging/debug_loop.py), identical for all arms",
+    "turn0": "greedy do_sample=False (Pass@1)",
+    "turns_1_to_K": "sampled temperature=1.0 top_p=0.95",
+    "max_new_tokens": 512,
+    "rollout_cap_K": 5,
+    "early_stop": "AC ends the loop, uniform across arms",
+    "seed_reset": "torch.manual_seed(42) + random.seed(42) at start of every arm x benchmark",
+    "tokenizer": "base tokenizer loaded fresh per arm (adapters do not modify it)"
+  },
+  "results": [
+    {"model": "Zero-Shot", "K": 1, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.46, "HE_Fix@K": 0.46, "MBPP_Pass@1": 0.07, "MBPP_Fix@K": 0.07, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "Zero-Shot", "K": 3, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.46, "HE_Fix@K": 0.97, "MBPP_Pass@1": 0.07, "MBPP_Fix@K": 0.16, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "Zero-Shot", "K": 5, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.46, "HE_Fix@K": 0.98, "MBPP_Pass@1": 0.07, "MBPP_Fix@K": 0.2, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "SFT", "K": 1, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.11, "HE_Fix@K": 0.11, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.01, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "SFT", "K": 3, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.11, "HE_Fix@K": 0.86, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.1, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "SFT", "K": 5, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.11, "HE_Fix@K": 0.94, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.2, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "PPO-dense", "K": 1, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.09, "HE_Fix@K": 0.09, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.01, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "PPO-dense", "K": 3, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.09, "HE_Fix@K": 0.77, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.09, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "PPO-dense", "K": 5, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.09, "HE_Fix@K": 0.92, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.14, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "PPO-binary", "K": 1, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.09, "HE_Fix@K": 0.09, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.01, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "PPO-binary", "K": 3, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.09, "HE_Fix@K": 0.85, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.11, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "PPO-binary", "K": 5, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.09, "HE_Fix@K": 0.92, "MBPP_Pass@1": 0.01, "MBPP_Fix@K": 0.19, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "DPO", "K": 1, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.47, "HE_Fix@K": 0.47, "MBPP_Pass@1": 0.06, "MBPP_Fix@K": 0.06, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "DPO", "K": 3, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.47, "HE_Fix@K": 0.98, "MBPP_Pass@1": 0.06, "MBPP_Fix@K": 0.11, "Exec_Success": 1.0, "Infra_Errors": 0},
+    {"model": "DPO", "K": 5, "N_HE": 100, "N_MBPP": 100, "HE_Pass@1": 0.47, "HE_Fix@K": 1.0, "MBPP_Pass@1": 0.06, "MBPP_Fix@K": 0.14, "Exec_Success": 1.0, "Infra_Errors": 0}
+  ],
+  "status_distributions": null,
+  "metric_definitions": {
+    "pass_at_1": "first rollout AC",
+    "fix_at_k": "AC within first k rollouts",
+    "exec_success": "problems where every rollout returned a valid sandbox verdict (AC/WA/RE/TLE/MLE/CE/PE); infra/harness failures excluded",
+    "infra_errors": "problems where the eval pipeline raised or returned no verdict (target: 0)"
+  }
+}
