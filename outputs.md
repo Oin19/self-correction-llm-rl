@@ -550,14 +550,14 @@ All 5 arms ran (no SKIPPED), `Exec_Success = 1.0`, `Infra_Errors = 0`, Fix@K mon
 | PPO-binary | 0.05 | 0.80 | 0.80 | 0.00 | 0.10 | 0.35 |
 | DPO | 0.45 | 0.95 | 1.00 | 0.10 | 0.30 | 0.30 |
 
-### Large N=100 (2026-09-28, commit `0c4da7f`; Fix@1 ≡ Pass@1 by construction)
-| Model | HE Pass@1 | HE Fix@3 | HE Fix@5 | MBPP Pass@1 | MBPP Fix@3 | MBPP Fix@5 |
-|---|---|---|---|---|---|---|
-| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.16 | 0.20 |
-| SFT | 0.11 | 0.86 | 0.94 | 0.01 | 0.10 | 0.20 |
-| PPO-dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.09 | 0.14 |
-| PPO-binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.11 | 0.19 |
-| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.14 |
+### Large N=100 (2026-09-28, commit `0c4da7f`; Fix@1 ≡ Pass@1 by construction; **proposal-basis preliminary — not final paper results**)
+| Model | HE Pass@1 | HE Fix@3 | HE Fix@5 | MBPP Pass@1 | MBPP Fix@3 | MBPP Fix@5 | Exec Success | Infra Errors |
+|---|---|---|---|---|---|---|---|---|
+| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.16 | 0.20 | 1.00 | 0 |
+| SFT | 0.11 | 0.86 | 0.94 | 0.01 | 0.10 | 0.20 | 1.00 | 0 |
+| PPO-dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.09 | 0.14 | 1.00 | 0 |
+| PPO-binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.11 | 0.19 | 1.00 | 0 |
+| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.14 | 1.00 | 0 |
 
 ### Observations (n=100 each benchmark; accepted as proposal-basis preliminary eval, full set reserved for final paper)
 1. **Self-correction loop is the dominant lever**: e.g. PPO-dense HE `0.09` Pass@1 → `0.92` Fix@5; SFT `0.11` → `0.94`.

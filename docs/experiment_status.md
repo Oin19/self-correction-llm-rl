@@ -51,6 +51,29 @@ The September 2026 notebook runs are preserved as execution evidence, but the nu
 | Paper training runs | **Complete** | Dense ✅ + binary ✅ (2026-09-25, 100 steps each, `36c8055`, metadata verified); DPO checkpoint ✅ (lead-approved NB06 run; base-init + 100 pairs caveat recorded in `outputs.md` NB07) |
 | 5-arm eval | **Partial** | Smoke N=20 ✅ + large N=100 ✅ (2026-09-28, `0c4da7f`, all 5 arms, Exec 100%, infra 0) — N=100 accepted as proposal-basis preliminary eval; FULL set (164+500) planned for final paper |
 
+## Preliminary 5-arm evaluation — N=100, proposal-basis (2026-09-28)
+
+> **PRELIMINARY / PROPOSAL-BASIS — NOT final paper results.** First 100 problems of HumanEval (of 164) and MBPP (of 500), identical subset and identical generation settings for all five arms. Full-set evaluation (164+500) is reserved for the final paper (rule 13).
+
+![Preliminary N=100 results](../results/preliminary_eval_n100.png)
+
+| Model | HE Pass@1 | HE Fix@3 | HE Fix@5 | MBPP Pass@1 | MBPP Fix@3 | MBPP Fix@5 | Exec Success | Infra Errors |
+|---|---|---|---|---|---|---|---|---|
+| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.16 | 0.20 | 1.00 | 0 |
+| SFT | 0.11 | 0.86 | 0.94 | 0.01 | 0.10 | 0.20 | 1.00 | 0 |
+| PPO-Dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.09 | 0.14 | 1.00 | 0 |
+| PPO-Binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.11 | 0.19 | 1.00 | 0 |
+| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.14 | 1.00 | 0 |
+
+**DPO caveat (RQ5)**: the current DPO checkpoint was **initialized from the base model** (the SFT-adapter search fell back) and trained on only **100 pairs**. Its numbers essentially track the base-model starting point (cf. Zero-Shot), so current DPO-vs-PPO numbers **cannot** be used as a clean RQ5 conclusion.
+
+**Verified / reproducible**:
+- **Fairness**: single shared dataset load → identical first-100 subsets for all arms; one generation path (`build_prompt`; turn-0 greedy; turns 1-4 temp 1.0 / top-p 0.95; 512 tokens; K=5; seed 42 reset per arm×benchmark); tests via `normalize_tests`.
+- **PPO provenance (Step A cell)**: dense vs binary metadata differ only in `reward_mode`/`reward_type`; `seed=42`, `commit=36c8055`, `max_steps=100`, HPs identical, trainable `3,147,777`.
+- **Checkpoint gate (NB07 runner)**: `PAPER_PPO_SPEC = {seed: 42, max_steps: 100, target_kl: 4}` + `commit_sha` prefix `36c8055` enforced — non-paper checkpoints raise **before** any evaluation; resolved `checkpoint_paths` recorded in the run JSON.
+- **Artifacts**: `results/evaluation_results_corrected.csv` + `.json` (with `artifact_provenance`); figure `results/preliminary_eval_n100.png/.pdf` generated from the CSV by `results/make_preliminary_figure.py`.
+- **Tests**: `python -m unittest discover -s tests` → 60 pass.
+
 ## Reporting rule
 
 Do not report the previous Notebook 7 percentages as empirical conclusions. Replace them only with results from the corrected, reproducible evaluation runs.
