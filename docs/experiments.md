@@ -100,7 +100,7 @@ Do not report a result without enough metadata to reproduce the run.
 | Seed | `42` |
 | Notes / anomalies | Supersedes NB06 2026-09-15 (100 pairs, pre-fix harness). |
 
-**Status**: Checkpoint exists — lead-approved NB06 run executed with the legacy harness on `train[:100]`, initialized from the **base model** (SFT-adapter search fell back). Evaluated in NB07 (2026-09-28). Caveats recorded in `outputs.md` NB07; the `train[:500]` + `normalize_tests` plan above remains the intended paper configuration if a retrain is ever approved (lead: no more training).
+**Status**: **Caveated preliminary run only** — lead-approved NB06 execution on `train[:100]` using the legacy harness, initialized from the **base model** (SFT-adapter search fell back). Evaluated in NB07 (2026-09-28); caveats recorded in `outputs.md` NB07. Not usable as a clean RQ5 comparison. A clean `train[:500]` + `normalize_tests` DPO retrain is **future work — NOT being run now**.
 
 ### EXP-EVAL-RQ3RQ4 (Planned — Full 5-Arm Evaluation)
 
