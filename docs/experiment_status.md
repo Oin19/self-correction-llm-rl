@@ -59,11 +59,11 @@ The September 2026 notebook runs are preserved as execution evidence, but the nu
 
 | Model | HE Pass@1 | HE Fix@3 | HE Fix@5 | MBPP Pass@1 | MBPP Fix@3 | MBPP Fix@5 | Exec Success | Infra Errors |
 |---|---|---|---|---|---|---|---|---|
-| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.16 | 0.20 | 1.00 | 0 |
-| SFT | 0.11 | 0.86 | 0.94 | 0.01 | 0.10 | 0.20 | 1.00 | 0 |
-| PPO-Dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.09 | 0.14 | 1.00 | 0 |
-| PPO-Binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.11 | 0.19 | 1.00 | 0 |
-| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.14 | 1.00 | 0 |
+| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.18 | 0.20 | 1.00 | 0 |
+| SFT | 0.11 | 0.81 | 0.90 | 0.01 | 0.12 | 0.21 | 1.00 | 0 |
+| PPO-Dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.14 | 0.24 | 1.00 | 0 |
+| PPO-Binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.16 | 0.24 | 1.00 | 0 |
+| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.21 | 1.00 | 0 |
 
 **DPO caveat (RQ5)**: the current DPO checkpoint was **initialized from the base model** (the SFT-adapter search fell back) and trained on only **100 pairs**. Its numbers essentially track the base-model starting point (cf. Zero-Shot), so current DPO-vs-PPO numbers **cannot** be used as a clean RQ5 conclusion.
 

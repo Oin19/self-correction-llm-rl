@@ -553,20 +553,21 @@ All 5 arms ran (no SKIPPED), `Exec_Success = 1.0`, `Infra_Errors = 0`, Fix@K mon
 ### Large N=100 (2026-09-28, commit `0c4da7f`; Fix@1 ≡ Pass@1 by construction; **proposal-basis preliminary — not final paper results**)
 | Model | HE Pass@1 | HE Fix@3 | HE Fix@5 | MBPP Pass@1 | MBPP Fix@3 | MBPP Fix@5 | Exec Success | Infra Errors |
 |---|---|---|---|---|---|---|---|---|
-| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.16 | 0.20 | 1.00 | 0 |
-| SFT | 0.11 | 0.86 | 0.94 | 0.01 | 0.10 | 0.20 | 1.00 | 0 |
-| PPO-dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.09 | 0.14 | 1.00 | 0 |
-| PPO-binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.11 | 0.19 | 1.00 | 0 |
-| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.14 | 1.00 | 0 |
+| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.18 | 0.20 | 1.00 | 0 |
+| SFT | 0.11 | 0.81 | 0.90 | 0.01 | 0.12 | 0.21 | 1.00 | 0 |
+| PPO-dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.14 | 0.24 | 1.00 | 0 |
+| PPO-binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.16 | 0.24 | 1.00 | 0 |
+| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.21 | 1.00 | 0 |
 
 ### Observations (n=100 each benchmark; accepted as proposal-basis preliminary eval, full set reserved for final paper)
-1. **Self-correction loop is the dominant lever**: e.g. PPO-dense HE `0.09` Pass@1 → `0.92` Fix@5; SFT `0.11` → `0.94`.
+1. **Self-correction loop is the dominant lever**: e.g. PPO-dense HE `0.09` Pass@1 → `0.92` Fix@5; SFT `0.11` → `0.90`.
 2. **Base-adjacent arms dominate first-shot**: Zero-Shot `0.46` / DPO `0.47` HE Pass@1 vs SFT-family `0.09–0.11`. Zero-Shot ≈ published deepseek-coder-1.3b-instruct HumanEval (~39%) — sanity ✓. APPS-SFT degrades HE/MBPP first-shot generation; PPO did not restore it (trained on APPS, evaluated cross-domain).
-3. **RQ4 (binary vs dense)**: PPO-binary ≥ PPO-dense — HE Fix@3 `0.85` vs `0.77`, MBPP Fix@5 `0.19` vs `0.14`, ties on HE Pass@1/Fix@5 — binary AC-only matches dense partial credit.
-4. **RQ5 caveat**: DPO ≈ its own starting point (Zero-Shot): HE 47 vs 46 Pass@1; MBPP Fix@5 `0.14` vs `0.20` (worse). The approved DPO run initialized from the **base model** (SFT-adapter search fell back) with 100 pairs — DPO ≫ PPO here largely reflects base-vs-SFT drift, **not** an apples-to-apples DPO-from-SFT vs PPO comparison. Do not cite as RQ5 verdict without this caveat.
+3. **RQ4 (binary vs dense)**: observed higher for PPO-binary on HE Fix@3 `0.85` vs `0.77` and MBPP Fix@3 `0.16` vs `0.14`; identical on HE Pass@1 / HE Fix@5 (`0.92` vs `0.92`) and MBPP Pass@1 / MBPP Fix@5 (`0.24` vs `0.24`) — directional observation only, no significance or equivalence claim.
+4. **RQ5 caveat**: DPO ≈ its own starting point (Zero-Shot): HE 47 vs 46 Pass@1; MBPP Fix@5 `0.21` vs `0.20` (≈ equal). The approved DPO run initialized from the **base model** (SFT-adapter search fell back) with 100 pairs — DPO ≫ PPO here largely reflects base-vs-SFT drift, **not** an apples-to-apples DPO-from-SFT vs PPO comparison. Do not cite as RQ5 verdict without this caveat.
 5. Smoke (N=20) directions reproduced at N=100.
 - **Status**: large eval (N=100) accepted as the **proposal-basis preliminary evaluation** (proposal scope, 2026-09-28). FULL run (164 HE + 500 MBPP, `EVAL_N=None`) remains the planned final-paper target per experiment rule 13.
 - **Artifact record (2026-09-28, post-run)**: the Kaggle session ended without persisting `/kaggle/working` — the original `evaluation_results_corrected.csv/.json` from this run were lost. Exact transcriptions (n=100 → every metric is count/100, no precision loss) are archived at `results/evaluation_results_corrected.csv` + `results/evaluation_results_corrected.json`; the JSON carries an `artifact_provenance` block and marks the two unrecoverable fields (`timestamp_utc`, `status_distributions`) as null. Separately, an accidental re-evaluation against the **flagged first-version notebook-5 output** (non-paper checkpoint) was run; its artifacts were also lost with the session — **no results from that run are retained or reportable**. NB07's runner cell now enforces a provenance gate (`seed 42 / max_steps 100 / target_kl 4 / commit 36c8055*`) that raises before evaluating any non-paper PPO checkpoint.
+- **Value replacement (2026-09-29, lead-approved)**: the Fix@3/Fix@5 values in the N=100 table above were replaced with those from a console capture of the same commit (`0c4da7f`, gate paths + DPO metadata WARN verified). All Pass@1 / Exec_Success / Infra_Errors values are unchanged; Fix@K differences are consistent with sampled turns 1-4 varying across executions of the same seeded eval. Source-session-of-origin was not identified — recorded as an open provenance item in `results/evaluation_results_corrected.json` (`artifact_provenance`). The 2026-09-28 transcription is superseded.
 - **Post-update path audit (2026-09-28)**: with the corrected notebook-5 output attached, `ppo_dense` → `notebook5/.../ppo_dense/final` and `ppo_binary` → `rjd2002/05-ppo-training/.../ppo_binary/final` both show `seed 42 | max_steps 100 | target_kl 4.0 | commit 36c8055` (paper spec, gate-ready); `sft` resolves to notebook5's bundled `checkpoints/sft/final` copy (adapter hash vs notebook4 not compared — parked as low risk); `dpo` known leniency; `zero_shot` = base model.
 
 
