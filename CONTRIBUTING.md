@@ -1,59 +1,84 @@
-# Contribution & Team Workflow
+# Contribution & Research Workflow
 
-## Roles
+## Team Roles
 
-### Junior 1 — Model & Training
-- Model loading and generation
-- SFT
-- PPO
-- DPO
-- Training configuration and checkpoints
-
-### Junior 2 — Data, Execution & Evaluation
-- APPS preprocessing
-- Dataset splits
-- Sandboxed code execution
-- Traceback / feedback extraction
-- Debugging loop
-- Reward computation
-- Evaluation and metrics
-
-### Co-Lead
+### Co-Lead — Oindrila Banerjee
 - Research direction and experiment design
 - Scientific validation
-- Pull-request review
+- Experiment review
 - Reproducibility and leakage checks
-- Results interpretation and paper integration
+- Results interpretation
+- Research proposal and paper integration
+
+### Research Contributor — Rajdeep Bhowmick
+- Model and training implementation
+- SFT, PPO, and DPO experiments
+- Training configurations
+- Checkpoint management
+- Training logs and experiment artifacts
+
+### Research Contributor — Aihik Basu
+- Dataset preparation
+- Sandboxed code execution
+- Debugging loop
+- Evaluation harness
+- Metrics and analysis
+- Evaluation artifacts
 
 ## Git Workflow
 
-1. Never push implementation directly to `main`.
-2. Start from an up-to-date `main` branch.
-3. Create a focused feature branch.
-4. Make small, descriptive commits.
-5. Push the feature branch.
-6. Open a Pull Request into `main`.
-7. Co-lead reviews the PR.
-8. Address requested changes.
-9. Merge only after approval.
+1. Work on a feature branch rather than directly on main.
+2. Keep commits focused and descriptive.
+3. Push experimental or implementation changes to the appropriate branch.
+4. Open a Pull Request into main for substantial changes.
+5. Co-Lead reviews research-critical changes before merging.
+6. Merge only after the relevant code, tests, and experiment provenance have been checked.
 
-### Branch naming
+## Research Reproducibility
 
-- `junior1/feature-model-loader`
-- `junior1/feature-sft`
-- `junior1/feature-ppo`
-- `junior2/feature-sandbox`
-- `junior2/feature-debug-loop`
-- `junior2/feature-evaluation`
+Every reported experiment should record, where applicable:
+
+- Model and checkpoint
+- Dataset and split
+- Random seed
+- Training configuration
+- Decoding settings
+- Reward configuration
+- Debugging-turn budget
+- Evaluation settings
+- Relevant Git commit SHA
+
+Research results should be traceable to the code, configuration, checkpoint, and evaluation procedure that produced them.
+
+## Experimental Integrity
+
+- Do not report preliminary or smoke-test results as final results.
+- Do not compare checkpoints with different initialization or training conditions as if they were matched experiments.
+- Record known limitations and experimental caveats.
+- Keep evaluation and training data clearly separated where required.
+- Do not silently replace missing checkpoints, datasets, or evaluation components with substitutes.
+- Verify benchmark tests before using execution results as evidence.
+
+## What Not to Commit
+
+- Model weights or large checkpoint files
+- API keys, credentials, or secrets
+- Private or restricted datasets
+- Large raw experiment artifacts unless specifically required
+- Unverified benchmark results presented as final findings
 
 ## Pull Request Checklist
 
-- [ ] The change has one clear purpose.
-- [ ] Code runs on the intended environment.
-- [ ] Relevant tests were run.
-- [ ] No credentials or model weights are included.
-- [ ] No raw/private dataset is committed.
-- [ ] Experiment configuration is documented.
-- [ ] Random seeds and sampling settings are recorded where applicable.
-- [ ] Results are reproducible from the committed code/config.
-- [ ] The PR explains which research question or milestone it supports.
+- [ ] Code runs in the intended environment.
+- [ ] Relevant tests pass.
+- [ ] Configuration is documented.
+- [ ] Random seed and sampling settings are recorded where applicable.
+- [ ] Checkpoint provenance is clear.
+- [ ] No data leakage or unintended test-set use is introduced.
+- [ ] Research claims are supported by the corresponding experiment.
+- [ ] Important limitations or caveats are documented.
+- [ ] The change is reproducible from the committed code/configuration.
+
+## Research Principle
+
+The repository should distinguish clearly between what has been implemented, what has been experimentally validated, what is preliminary evidence, and what remains proposed future work.
