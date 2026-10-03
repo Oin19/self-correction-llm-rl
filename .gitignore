@@ -29,6 +29,11 @@ results/logs/*
 results/metrics/*
 results/figures/*
 
-# OS
+# OS and Archives
 .DS_Store
 Thumbs.db
+*.zip
+
+# Chat exports — never commit or push
+chat_media/
+project_chat_history.md

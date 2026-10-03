@@ -12,13 +12,11 @@ Research project investigating whether small Code LLMs can learn iterative progr
 6. How many debugging turns are useful?
 7. Does learned behavior generalize across benchmarks?
 
-## Primary Model Family
+## Primary Model
 
-- Qwen2.5-Coder 1.5B Instruct
-- Qwen2.5-Coder 3B Instruct
-- Qwen2.5-Coder 7B Instruct
+- `deepseek-ai/deepseek-coder-1.3b-instruct` — used for all runs to date (SFT, PPO-dense, PPO-binary, DPO) and the N=100 evaluation.
 
-Additional small Code LLMs may be evaluated for cross-family analysis.
+Other small Code LLMs (e.g., the Qwen2.5-Coder family) may be evaluated later for cross-family analysis.
 
 ## Methods
 
@@ -61,4 +59,7 @@ checkpoints/  Checkpoint instructions; model weights are not committed
 
 ## Status
 
-Pipeline validation is currently in progress. Quantitative research claims will be added only after controlled experiments are completed.
+- **PPO dense + binary training complete (2026-09-25)**: both paper arms trained 100 steps each with identical HPs/seed (`36c8055`), metadata verified (dense reward vs AC-only binary reward, KL-bounded). See `docs/experiments.md` and `outputs.md`.
+- **N=100 five-arm preliminary evaluation complete (2026-09-28)**: Zero-Shot / SFT / PPO-dense / PPO-binary / DPO on the first 100 HumanEval + 100 MBPP problems — identical problems, generation settings, and sample budget for all arms; Exec Success 1.00, Infra Errors 0. **Proposal-basis preliminary results, not final paper results.** Table + figure: `docs/experiment_status.md`, `results/preliminary_eval_n100.png`. The current DPO checkpoint is a caveated preliminary run (base-initialized, 100 pairs) — not a clean RQ5 conclusion.
+- **Reserved for final paper**: full five-arm evaluation on HumanEval (164) + MBPP (500), and a clean `train[:500]` DPO retrain (future work — not running now).
+- Tests: 60 pass (`python -m unittest discover -s tests`).
