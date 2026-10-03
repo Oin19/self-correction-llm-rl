@@ -1,6 +1,6 @@
-# Self-Correction in LLMs via Execution-Guided Reinforcement Learning
+# Self-Correction in Small Code Language Models via Execution-Guided Reinforcement Learning
 
-Research project investigating whether small Code LLMs can learn iterative program debugging through execution-guided feedback.
+Research project investigating whether small Code LLMs can learn iterative program debugging from execution-guided feedback, and which reward, feedback, and optimization choices enable reliable self-correction.
 
 ## Research Questions
 
@@ -52,10 +52,9 @@ data/         Data preparation instructions and local data placeholders
 configs/      Model, training, and experiment configurations
 tests/        Unit tests
 docs/         Research and workflow documentation
-results/      Metrics, logs, and figures (large outputs kept out of Git)
+results/      Evaluation metrics, figures, and selected result artifacts
 checkpoints/  Checkpoint instructions; model weights are not committed
 ```
-
 
 ## Status
 
