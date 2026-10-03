@@ -1,22 +1,23 @@
 # Self-Correction in Small Code Language Models via Execution-Guided Reinforcement Learning
 
-Research project investigating whether small Code LLMs can learn iterative program debugging from execution-guided feedback, and which reward, feedback, and optimization choices enable reliable self-correction.
+Research project investigating when small Code LLMs can learn useful self-correction from execution feedback, and how reward design, feedback quality, optimization method, and debugging-turn budget affect repair behavior.
 
 ## Research Questions
 
-1. Can small language models perform agentic debugging?
+1. Can small language models perform agentic debugging via execution feedback?
 2. How does the quality and type of execution feedback affect self-correction?
-3. Does RL outperform prompting and SFT?
-4. How does reward design affect learning?
-5. Is DPO a viable alternative to PPO?
-6. How many debugging turns are useful?
-7. Does learned behavior generalize across benchmarks?
+3. How does reinforcement learning compare with zero-shot prompting and SFT for multi-turn debugging?
+4. How does reward design, particularly dense partial-credit versus binary execution reward, affect learning?
+5. How does matched DPO compare with PPO for execution-guided self-correction?
+6. How does the debugging-turn budget affect cumulative and conditional repair?
+7. Does behavior learned on APPS transfer to HumanEval and MBPP?
 
 ## Primary Model
 
-- `deepseek-ai/deepseek-coder-1.3b-instruct` — used for all runs to date (SFT, PPO-dense, PPO-binary, DPO) and the N=100 evaluation.
+- `deepseek-ai/deepseek-coder-1.3b-instruct` — the primary model used in the completed pilot and current training pipeline.
+- LoRA is used for parameter-efficient adaptation.
 
-Other small Code LLMs (e.g., the Qwen2.5-Coder family) may be evaluated later for cross-family analysis.
+The proposed study may extend the protocol to 3B and 7B backbones if computational resources permit.
 
 ## Methods
 
@@ -25,23 +26,73 @@ Other small Code LLMs (e.g., the Qwen2.5-Coder family) may be evaluated later fo
 - Proximal Policy Optimization (PPO)
 - Direct Preference Optimization (DPO)
 
-## Evaluation
+The completed pilot uses four matched evaluation arms: Zero-Shot, SFT, PPO-Dense, and PPO-Binary. DPO is part of the proposed research, but the preliminary DPO checkpoint was initialized from the base model rather than the matched SFT checkpoint and is therefore excluded from PPO-DPO conclusions.
 
-- Pass@1
-- Fix@3
-- Fix@5
-- Execution status and error recovery
-- Wall-clock time
-- VRAM usage
-- Reward stability
+## Execution-Guided Debugging
 
-## Experimental Design
-
-The core debugging loop is:
+The core research loop is:
 
 `problem → initial code → execute → feedback → correction → execute → ...`
 
-Planned execution statuses include AC, WA, TLE, MLE, CE, and RE. Experiments use multiple debugging turns and controlled comparisons across feedback, reward, model-size, and training-method conditions.
+Generated Python programs are executed in a sandbox with execution controls. The pipeline records execution outcomes and uses feedback from failed attempts to condition subsequent corrections. The proposed study considers multiple debugging budgets, including K = 1, 3, and 5, with additional turn-budget analysis planned.
+
+## Reward Design
+
+The pilot compares two PPO reward formulations under matched training conditions:
+
+- **PPO-Dense:** accepted programs receive 1.0; non-accepted programs can receive partial credit based on tests passed, with penalties for zero-pass execution failures.
+- **PPO-Binary:** accepted programs receive 1.0 and all other outcomes receive 0.
+
+The purpose is to study whether richer execution-based reward information improves learning rather than to assume that one reward formulation is superior.
+
+## Preliminary Pilot
+
+A completed DeepSeek-Coder 1.3B pilot evaluates:
+
+- Zero-Shot
+- SFT
+- PPO-Dense
+- PPO-Binary
+
+on the first 100 problems from HumanEval and the first 100 problems from MBPP.
+
+Reported metrics are:
+
+- Pass@1 — first-attempt success
+- Fix@3 — cumulative success by the third correction attempt
+- Fix@5 — cumulative success by the fifth correction attempt
+- Conditional repair rate — planned for the full analysis
+- Execution status and error recovery
+- Tokens, latency, and compute cost — planned for expanded evaluation
+
+The pilot is preliminary evidence and is used to motivate the proposed controlled experiments. It does not establish that RL is universally better than zero-shot prompting or SFT.
+
+## Proposed Research
+
+The next stages are:
+
+1. **Full benchmark evaluation:** HumanEval (164) and MBPP (500) under fixed evaluation settings and gate-verified checkpoints.
+2. **Matched DPO retraining:** train DPO from the same SFT initialization and use the same normalized execution harness as PPO.
+3. **Feedback ablations:** compare no feedback, status-only feedback, sanitized traceback/error feedback, and richer structured execution feedback.
+4. **Turn-budget analysis:** vary K and report cumulative success, conditional repair, marginal gain per turn, latency, and compute.
+5. **Transfer evaluation:** use held-out APPS evaluation to distinguish in-domain behavior from transfer to HumanEval and MBPP.
+6. **Model-scale analysis:** if resources permit, repeat the protocol on 3B and 7B backbones.
+
+## Evaluation and Analysis
+
+The study is designed to separate first-attempt generation quality from actual repair ability. In addition to Pass@1 and cumulative Fix@K, the planned analysis includes:
+
+- Conditional repair rate among first-attempt failures
+- Failure-category transitions
+- Execution-harness failures
+- Tokens generated
+- Wall-clock latency
+- Marginal compute cost per repair turn
+- Bootstrap confidence intervals
+- Paired statistical tests for full-benchmark comparisons
+- Analysis by failure type and feedback condition
+
+A no-feedback control will use the same attempt and decoding budget to distinguish genuine use of execution evidence from gains caused only by repeated sampling.
 
 ## Repository Structure
 
@@ -58,7 +109,14 @@ checkpoints/  Checkpoint instructions; model weights are not committed
 
 ## Status
 
-- **PPO dense + binary training complete (2026-09-25)**: both paper arms trained 100 steps each with identical HPs/seed (`36c8055`), metadata verified (dense reward vs AC-only binary reward, KL-bounded). See `docs/experiments.md` and `outputs.md`.
-- **N=100 five-arm preliminary evaluation complete (2026-09-28)**: Zero-Shot / SFT / PPO-dense / PPO-binary / DPO on the first 100 HumanEval + 100 MBPP problems — identical problems, generation settings, and sample budget for all arms; Exec Success 1.00, Infra Errors 0. **Proposal-basis preliminary results, not final paper results.** Table + figure: `docs/experiment_status.md`, `results/preliminary_eval_n100.png`. The current DPO checkpoint is a caveated preliminary run (base-initialized, 100 pairs) — not a clean RQ5 conclusion.
-- **Reserved for final paper**: full five-arm evaluation on HumanEval (164) + MBPP (500), and a clean `train[:500]` DPO retrain (future work — not running now).
-- Tests: 60 pass (`python -m unittest discover -s tests`).
+- **Pipeline implemented:** execution-guided debugging, sandboxed execution, reward computation, evaluation utilities, checkpoint-provenance checks, and reproducibility tooling are in place.
+- **PPO training complete:** dense-reward and binary-reward PPO pilot arms were trained for 100 steps with matched hyperparameters/seed and verified metadata.
+- **Four-arm preliminary evaluation complete:** Zero-Shot / SFT / PPO-Dense / PPO-Binary were evaluated on the first 100 HumanEval and first 100 MBPP problems. These results are preliminary pilot evidence, not final full-benchmark results.
+- **DPO:** a preliminary 100-pair DPO checkpoint exists, but it was initialized from the base model rather than the matched SFT checkpoint. It is excluded from PPO-DPO conclusions; matched DPO retraining is planned.
+- **Next major evaluation:** full HumanEval (164) + MBPP (500), followed by matched DPO, feedback ablations, turn-budget analysis, and APPS transfer evaluation.
+- **Model scaling:** 3B/7B experiments are planned if computational resources permit.
+- **Tests:** 60 pass (`python -m unittest discover -s tests`).
+
+## Research Principle
+
+The project does not assume that reinforcement learning, dense rewards, DPO, or additional debugging turns are inherently better. The goal is to identify the conditions under which execution-guided self-correction helps small code models, and when it remains unreliable.
