@@ -1,81 +1,103 @@
 # Experiment Validation Status
 
-## Current status
+## Current Status
 
-The September 2026 notebook runs are preserved as execution evidence, but the numerical results from the original Notebook 7 must not be treated as final paper results until they are reproduced with the corrected execution pipeline.
+The September 2026 notebook runs are preserved as execution evidence. The current proposal is based on a **four-arm preliminary pilot**:
 
-### Corrected requirements
+1. Zero-Shot
+2. SFT
+3. PPO-Dense
+4. PPO-Binary
+
+The pilot is intended to motivate the proposed research rather than establish final benchmark conclusions.
+
+## Corrected Requirements
 
 1. Every scored example must have explicit executable benchmark tests.
 2. Empty test suites must never receive an AC score.
-3. MBPP `test_list`, HumanEval `test`, and APPS `input_output` must be recognized.
-4. PPO must load the trained SFT adapter; it must not silently fall back to the base model.
+3. MBPP `test_list`, HumanEval `test`, and APPS `input_output` must be recognized correctly.
+4. PPO must load the trained SFT adapter and must not silently fall back to the base model.
 5. PPO reward must be computed from benchmark execution, not merely process exit status.
-6. The evaluation must not silently replace a missing SFT/PPO/DPO checkpoint with the base model.
-7. Smoke-test results (N<=20 per benchmark) are validation evidence only, not final paper results.
-8. Final comparisons must use the same fixed evaluation set, decoding settings, and evaluation code for all available variants.
-9. Packed APPS multi-test stdin suites must be scored with segment/line partial credit (`packed_tests=T`), not binary 0/1.
-10. PPO must use a frozen SFT `ref_model` (`is_peft_model=False`, `kl_penalty=abs`, `horizon=100`) so KL is measured against the SFT policy, not the base model.
-11. Paper PPO runs must set `reward_mode` (`dense` for RQ3, `binary` for RQ4), fixed `seed`, and write to separate dirs `./checkpoints/ppo_dense` / `./checkpoints/ppo_binary` with `ppo_metadata.json` recording mode, seed, and commit SHA.
-12. DPO preference collection must use the same `normalize_tests` harness as PPO/eval (not the old monolithic `parse_apps_test_cases` path). Paper DPO uses `train[:500]+` with seed 42.
-13. Final evaluation must cover five arms: Zero-Shot, SFT, PPO-dense, PPO-binary, DPO on full HumanEval (164) + MBPP (500) with identical seed/decoding/tests.
+6. Evaluation must not silently replace a missing checkpoint with the base model.
+7. Smoke-test results (N <= 20 per benchmark) are validation evidence only, not final paper results.
+8. Final comparisons must use the same fixed evaluation set, decoding settings, and evaluation code for all compared variants.
+9. Packed APPS multi-test stdin suites must be scored with segment/line partial credit rather than binary 0/1.
+10. PPO must use a frozen SFT reference model so that KL is measured against the intended SFT policy.
+11. Paper PPO runs must record reward mode, seed, checkpoint directory, and commit SHA in metadata.
+12. DPO preference collection must use the same normalized execution-test harness as PPO/evaluation.
+13. Any final multi-arm comparison must use matched initialization, identical evaluation settings, and verified benchmark tests.
 
-## Corrected notebooks
+## Corrected Notebooks
 
-- `notebooks/05_ppo_training_corrected.ipynb`: PPO with `REWARD_MODE` dense/binary, separate checkpoint dirs, seed 42, `MAX_STEPS=100` paper default (10 = smoke).
-- `notebooks/06_dpo_training.ipynb`: fresh `junior-A` clone, `normalize_tests` harness, `train[:500]` preference split, seed logged.
-- `notebooks/07_evaluation_and_ablations_corrected.ipynb`: five-arm eval (Zero-Shot / SFT / PPO-dense / PPO-binary / DPO), full-set by default, fixed seed.
+- `notebooks/05_ppo_training_corrected.ipynb`: PPO with dense/binary reward modes, separate checkpoint directories, fixed seed, and paper-run metadata.
+- `notebooks/06_dpo_training.ipynb`: DPO preference collection using the normalized execution-test harness.
+- `notebooks/07_evaluation_and_ablations_corrected.ipynb`: evaluation and ablation pipeline with fixed evaluation settings.
 
-## PPO validation
+## PPO Validation
 
-- **Smoke Test Status**: **PASSED (2026-09-18)** — pipeline only; metrics from that run are superseded.
-- **Verified Training Status**: **PASSED (2026-09-24)** on `junior-A` @ `56ce85a` / `d3cada9`
-  - SFT adapter (`./checkpoints/sft/final`) loaded into `AutoModelForCausalLMWithValueHead` with frozen `ref_model`.
-  - Supervisor issues **all fixed and verified against real Kaggle logs**:
-    1. **Partial/positive rewards**: packed multi-test suites yield `passed=2/8`, `1/4`, `1/3` with `reward=0.25–0.33`; full AC samples at `1.0`.
-    2. **KL sign/magnitude**: step 1 `kl=0.000`, steps 2–10 `kl` in `[1.10, 2.17]`, all positive; adaptive `kl_coef` decays `0.0500→0.0482` (correct when KL < target).
-    3. **`grad_norm` logging**: non-zero every step (`0.16–0.32`); `param_norm_delta` and `sample_lora_delta` positive throughout.
-  - Full step-by-step metrics: see `outputs.md` → “Notebook 05: Reinforcement Learning: PPO Training” (2026-09-24 verified section).
-  - Test suite: **56 tests pass** locally (`python -m unittest discover -s tests`).
-  - Note: that diagnostic used the legacy `./checkpoints/ppo` dir. Paper arms write to `ppo_dense` / `ppo_binary` with `reward_mode` + seed in metadata.
+- **Smoke test:** PASSED (2026-09-18) as pipeline validation; its metrics are superseded.
+- **Verified training validation:** PASSED (2026-09-24) on the corrected PPO pipeline.
+  - SFT adapter loaded into the PPO policy.
+  - Frozen reference policy used for KL measurement.
+  - Partial execution rewards were observed on multi-test suites.
+  - Positive KL values and non-zero gradient norms were observed during the diagnostic run.
+- The diagnostic run used for validation is retained as execution evidence; it is not itself the final paper comparison.
+- Test suite status recorded in the repository: 60 tests pass.
 
-## Paper-run readiness (2026-09-24)
+## Paper-Run Status
 
-| Component | Ready? | Notes |
+| Component | Status | Notes |
 |---|---|---|
-| Dense reward + packed partial credit | Yes | `score_rollout_reward(..., "dense")` |
-| Binary AC-only reward | Yes | `score_rollout_reward(..., "binary")` |
-| Dual checkpoints + metadata | Yes | `ppo_dense` / `ppo_binary`, seed + commit in JSON |
-| DPO harness = PPO harness | Yes | `parse_apps_test_cases` → `normalize_tests` |
-| NB05 / NB06 / NB07 wiring | Yes | Flip `REWARD_MODE`, full eval arms |
-| Paper training runs | **Complete** | Dense ✅ + binary ✅ (2026-09-25, 100 steps each, `36c8055`, metadata verified); DPO checkpoint ✅ (lead-approved NB06 run; base-init + 100 pairs caveat recorded in `outputs.md` NB07) |
-| 5-arm eval | **Partial** | Smoke N=20 ✅ + large N=100 ✅ (2026-09-28, `0c4da7f`, all 5 arms, Exec 100%, infra 0) — N=100 accepted as proposal-basis preliminary eval; FULL set (164+500) planned for final paper |
+| PPO-Dense training | Complete | 100-step pilot run with recorded seed/checkpoint metadata |
+| PPO-Binary training | Complete | 100-step pilot run with recorded seed/checkpoint metadata |
+| Four-arm preliminary evaluation | Complete, preliminary | Zero-Shot / SFT / PPO-Dense / PPO-Binary; proposal-basis evidence only |
+| DPO | Preliminary / not matched | Existing DPO checkpoint was initialized from the base model rather than the matched SFT checkpoint; excluded from PPO-DPO conclusions |
+| Full benchmark evaluation | Planned | HumanEval (164) + MBPP (500), after clean execution-harness validation |
+| Matched DPO retraining | Planned | Same SFT initialization and normalized execution harness as PPO |
+| Feedback ablations | Planned | No feedback, status-only, sanitized traceback/error, and richer structured feedback |
+| Turn-budget analysis | Planned | Vary K and analyze cumulative success, conditional repair, marginal gain per turn, latency, and compute |
+| APPS transfer evaluation | Planned | Distinguish in-domain behavior from transfer to HumanEval and MBPP |
+| Model-scale analysis | Planned if resources permit | Extend protocol to 3B and 7B backbones |
 
-## Preliminary 5-arm evaluation — N=100, proposal-basis (2026-09-28)
+## Preliminary Evaluation: Reproducibility Gate
 
-> **PRELIMINARY / PROPOSAL-BASIS — NOT final paper results.** First 100 problems of HumanEval (of 164) and MBPP (of 500), identical subset and identical generation settings for all five arms. Full-set evaluation (164+500) is reserved for the final paper (rule 13).
+A preliminary four-arm evaluation on the first 100 HumanEval and first 100 MBPP problems had previously been recorded in the repository.
 
-![Preliminary N=100 results](../results/preliminary_eval_n100.png)
+**Current reporting status:** these numerical results are **not treated as final or reproducible evidence until the HumanEval execution harness has been independently validated and the evaluation is rerun from a clean checkout.**
 
-| Model | HE Pass@1 | HE Fix@3 | HE Fix@5 | MBPP Pass@1 | MBPP Fix@3 | MBPP Fix@5 | Exec Success | Infra Errors |
-|---|---|---|---|---|---|---|---|---|
-| Zero-Shot | 0.46 | 0.97 | 0.98 | 0.07 | 0.18 | 0.20 | 1.00 | 0 |
-| SFT | 0.11 | 0.81 | 0.90 | 0.01 | 0.12 | 0.21 | 1.00 | 0 |
-| PPO-Dense | 0.09 | 0.77 | 0.92 | 0.01 | 0.14 | 0.24 | 1.00 | 0 |
-| PPO-Binary | 0.09 | 0.85 | 0.92 | 0.01 | 0.16 | 0.24 | 1.00 | 0 |
-| DPO | 0.47 | 0.98 | 1.00 | 0.06 | 0.11 | 0.21 | 1.00 | 0 |
+The repository therefore intentionally does **not** reproduce the previous N=100 percentage table here.
 
-**DPO caveat (RQ5)**: the current DPO checkpoint was **initialized from the base model** (the SFT-adapter search fell back) and trained on only **100 pairs**. Its numbers essentially track the base-model starting point (cf. Zero-Shot), so current DPO-vs-PPO numbers **cannot** be used as a clean RQ5 conclusion.
+Before reusing those numbers in the proposal or paper:
 
-**Verified / reproducible**:
-- **Fairness**: single shared dataset load → identical first-100 subsets for all arms; one generation path (`build_prompt`; turn-0 greedy; turns 1-4 temp 1.0 / top-p 0.95; 512 tokens; K=5; seed 42 reset per arm×benchmark); tests via `normalize_tests`.
-- **PPO provenance (Step A cell)**: dense vs binary metadata differ only in `reward_mode`/`reward_type`; `seed=42`, `commit=36c8055`, `max_steps=100`, HPs identical, trainable `3,147,777`.
-- **Checkpoint gate (NB07 runner)**: `PAPER_PPO_SPEC = {seed: 42, max_steps: 100, target_kl: 4}` + `commit_sha` prefix `36c8055` enforced — non-paper checkpoints raise **before** any evaluation; resolved `checkpoint_paths` recorded in the run JSON.
-- **Artifacts**: `results/evaluation_results_corrected.csv` + `.json` (with `artifact_provenance`); figure `results/preliminary_eval_n100.png/.pdf` generated from the CSV by `results/make_preliminary_figure.py`.
-- **Tests**: `python -m unittest discover -s tests` → 60 pass.
+1. Validate the HumanEval harness on a small manually inspected set.
+2. Confirm that correct, wrong, syntax-error, and runtime-error programs receive the expected execution statuses.
+3. Run a small smoke evaluation (for example, 5–20 problems).
+4. Record the exact repository commit, notebook commit, dataset revision, checkpoint provenance, and evaluation configuration.
+5. Rerun the preliminary evaluation from the clean validated pipeline.
+6. Only then promote the resulting numbers to proposal/paper evidence.
 
-## Reporting rule
+## DPO Caveat
 
-Do not report the previous Notebook 7 percentages as empirical conclusions. Replace them only with results from the corrected, reproducible evaluation runs.
+A preliminary DPO checkpoint exists, but it was initialized from the base model rather than the matched SFT checkpoint and was trained on a limited preference set.
 
-Do not cite the pre-fix PPO smoke/50-step logs (negative KL, `grad_norm=0`, binary-only rewards) as current results — they are retained in `outputs.md` only as historical superseded evidence.
+Therefore:
+
+- It is retained as development evidence.
+- It is **not** used for a clean PPO-vs-DPO conclusion.
+- Matched DPO retraining from the SFT initialization is part of the proposed research.
+
+## Reporting Rule
+
+The repository must clearly distinguish:
+
+- implemented pipeline components,
+- validated execution/training behavior,
+- preliminary pilot evidence,
+- final empirical results,
+- proposed future experiments.
+
+Do not report preliminary or smoke-test percentages as final conclusions.
+
+Do not use the old unmatched DPO checkpoint to make a PPO-vs-DPO claim.
+
+Do not promote the previous HumanEval/MBPP N=100 percentages until they have passed the reproducibility gate described above.
