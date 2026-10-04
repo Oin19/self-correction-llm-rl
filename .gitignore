@@ -25,9 +25,12 @@ checkpoints/*
 # Local datasets and large generated data
 data/raw/*
 data/processed/*
-results/logs/*
-results/metrics/*
-results/figures/*
+
+# Results — never commit or push
+results/
+
+# Generated output notes — never commit or push
+output*.md
 
 # OS and Archives
 .DS_Store
