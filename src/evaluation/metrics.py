@@ -50,3 +50,45 @@ def calculate_recovery_rate(sessions: List[Dict[str, Any]]) -> float:
 
 def summarize_eval_metrics(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"pass_at_1": calculate_pass_at_1(sessions), "fix_at_1": calculate_fix_at_k(sessions, 1), "fix_at_3": calculate_fix_at_k(sessions, 3), "fix_at_5": calculate_fix_at_k(sessions, 5), "recovery_rate": calculate_recovery_rate(sessions), "error_distribution": calculate_error_distribution(sessions), "total_eval_samples": len(sessions)}
+
+
+def evaluate_multi_k(
+    model,
+    tokenizer,
+    dataset,
+    max_k: int = 5,
+    label: str = "",
+    debug_loop_fn=None,
+) -> dict:
+    """Run one trajectory per problem and derive Pass@1/Fix@K from the same run."""
+    debug_loop_fn = debug_loop_fn or agentic_debug_loop
+    if max_k < 1:
+        raise ValueError("max_k must be >= 1")
+
+    sessions = []
+    for i, example in enumerate(dataset):
+        tests = extract_eval_test_cases(example)
+        if not tests:
+            raise ValueError(f"No executable tests for evaluation example {i}; refusing to score it.")
+        problem = example.get("prompt", example.get("question", example.get("text", "")))
+        history = debug_loop_fn(model, tokenizer, problem, tests, K=max_k)
+        statuses = [h["result"]["status"] for h in history]
+        solved_turn = next((j + 1 for j, status in enumerate(statuses) if status == "AC"), None)
+        sessions.append({
+            "problem_index": i,
+            "history": history,
+            "pass_at_1": bool(statuses) and statuses[0] == "AC",
+            "solved": solved_turn is not None,
+            "solved_turn": solved_turn,
+        })
+        if (i + 1) % 10 == 0 or i + 1 == len(dataset):
+            solved = sum(s["solved"] for s in sessions)
+            print(
+                f"{label} [{i+1}/{len(dataset)}] "
+                f"Pass@1={sum(s['pass_at_1'] for s in sessions)/(i+1):.2%} "
+                f"Fix@{max_k}={solved/(i+1):.2%}"
+            )
+
+    metrics = summarize_eval_metrics(sessions)
+    metrics["sessions"] = sessions
+    return metrics
