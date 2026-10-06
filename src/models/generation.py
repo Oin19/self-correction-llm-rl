@@ -5,7 +5,7 @@ import torch
 
 def generate_code(model, tokenizer, problem: str, temperature: float = 0.2, max_new_tokens: int = 512) -> str:
     """Generate one Python code solution for a given problem statement."""
-    prompt = f"### Problem:\n{problem}\n\n### Solution:\n```python"
+    prompt = f"### Problem:\n{problem}\n\n### Python Solution:\n```python"
     device = next(model.parameters()).device
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
