@@ -16,7 +16,7 @@ class TestRewards(unittest.TestCase):
         wa_res = ExecutionResult(status=ExecutionStatus.WA, passed_tests=2, total_tests=5)
 
         self.assertEqual(compute_binary_reward(ac_res), 1.0)
-        self.assertEqual(compute_binary_reward(wa_res), 0.0)
+        self.assertEqual(compute_binary_reward(wa_res), -0.2)
 
     def test_partial_reward(self):
         ac_res = ExecutionResult(status=ExecutionStatus.AC, passed_tests=5, total_tests=5)
