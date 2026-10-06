@@ -12,9 +12,9 @@ from src.rewards.execution_reward import compute_partial_reward
 
 def build_prompt(problem: str, prev_code: str = None, traceback: str = None) -> str:
     if prev_code is None:
-        return f"### Problem:\n{problem}\n\n### Write a Python solution:\n```python"
+        return f"### Problem:\n{problem}\n\n### Solution:\n```python"
     return (f"### Problem:\n{problem}\n\n### Your previous code:\n```python\n{prev_code}\n```\n\n"
-            f"### Error you received:\n{(traceback or '')[:512]}\n\n### Fixed version:\n```python")
+            f"### Error you received:\n{(traceback or '')[:512]}\n\n### Solution:\n```python")
 
 
 def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = None) -> ExecutionResult:
