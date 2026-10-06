@@ -257,6 +257,23 @@ class PythonSandbox:
         )
 
     @staticmethod
+    def _build_human_eval_runner(code: str, test_code: str, entry_point: str) -> str:
+        """Run a standard HumanEval check(candidate) harness against generated code."""
+        return (
+            f"{code}\n\n"
+            f"{test_code}\n\n"
+            "import sys, traceback\n"
+            "try:\n"
+            f"    check({entry_point})\n"
+            "except AssertionError:\n"
+            "    traceback.print_exc()\n"
+            "    sys.exit(2)\n"
+            "except Exception:\n"
+            "    traceback.print_exc()\n"
+            "    sys.exit(1)\n"
+        )
+
+    @staticmethod
     def _extract_actual_output(stderr: str) -> Optional[str]:
         start = "###ACTUAL###"
         end = "###END###"
@@ -270,6 +287,61 @@ class PythonSandbox:
     def _build_runner_script(self, code: str, test_case: Optional[Dict[str, Any]]) -> str:
         """Build a harness that executes the solution only after test I/O is installed."""
         test_case = test_case or {}
+
+        if "human_eval_test" in test_case and "entry_point" in test_case:
+            harness_code = self._build_human_eval_runner(
+                code,
+                test_case["human_eval_test"],
+                test_case["entry_point"],
+            )
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as tmp_file:
+                tmp_file.write(harness_code)
+                tmp_path = tmp_file.name
+
+            start = time.time()
+            try:
+                def preexec_limit():
+                    if resource is not None and os.name != "nt":
+                        try:
+                            limit = int(self.max_memory_mb * 1024 * 1024)
+                            resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+                        except Exception:
+                            pass
+
+                proc = subprocess.run(
+                    [sys.executable, tmp_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    preexec_fn=preexec_limit if (resource is not None and os.name != "nt") else None,
+                )
+                elapsed = time.time() - start
+                stderr = proc.stderr
+                if proc.returncode == 0:
+                    return ExecutionResult(ExecutionStatus.AC, 1, 1, proc.stdout, stderr, execution_time=elapsed)
+                if proc.returncode == 2:
+                    return ExecutionResult(ExecutionStatus.WA, 0, 1, proc.stdout, stderr, stderr.strip(), execution_time=elapsed)
+                if "MemoryError" in stderr:
+                    status = ExecutionStatus.MLE
+                elif "SyntaxError" in stderr or "IndentationError" in stderr:
+                    status = ExecutionStatus.CE
+                else:
+                    status = ExecutionStatus.RE
+                return ExecutionResult(status, 0, 1, proc.stdout, stderr, stderr.strip(), execution_time=elapsed)
+            except subprocess.TimeoutExpired:
+                return ExecutionResult(
+                    ExecutionStatus.TLE, 0, 1,
+                    stderr=f"Execution timed out after {timeout} seconds.",
+                    traceback=f"TimeoutError: Code execution exceeded {timeout}s.",
+                )
+            except Exception as e:
+                return ExecutionResult(ExecutionStatus.RE, 0, 1, stderr=str(e), traceback=traceback.format_exc())
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
 
         if "input" in test_case and "output" in test_case and isinstance(test_case["input"], str):
             inp = repr(test_case["input"])
