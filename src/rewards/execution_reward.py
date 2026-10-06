@@ -46,9 +46,11 @@ def compute_binary_reward(
     success_reward: float = 1.0,
     penalty: float = -0.2,
 ) -> float:
-    """Computes binary execution reward (+1.0 for AC, 0.0 for any failure)."""
+    """Computes binary execution reward (+1.0 for AC, -0.2 for any failure)."""
     status = result.status if isinstance(result, ExecutionResult) else result.get("status", "")
-    return success_reward if status == ExecutionStatus.AC else 0.0
+    if status == ExecutionStatus.AC:
+        return success_reward
+    return penalty
 
 
 def compute_partial_reward(
