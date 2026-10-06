@@ -113,19 +113,6 @@ def normalize_tests(ex: dict) -> list:
         if tl:
             sources.append(tl)
 
-    # HumanEval stores an executable check(candidate) program in test and
-    # identifies the candidate function through entry_point. It must be kept
-    # as a dedicated harness rather than treated as one assertion string.
-    if (
-        isinstance(ex.get("test"), str)
-        and ex["test"].strip()
-        and ex.get("entry_point")
-    ):
-        return [{
-            "human_eval_test": ex["test"],
-            "entry_point": ex["entry_point"],
-        }]
-
     if isinstance(ex.get("test"), str) and ex["test"].strip():
         sources.append([ex["test"]])
 
